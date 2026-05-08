@@ -200,3 +200,11 @@ Multiplayer, Save, RunSave, Lobby, HostSubmenu, LoadGame
 - method `SetReady(System.Boolean ready)` -> `System.Void`
 - method `TryBeginRun()` -> `System.Threading.Tasks.Task`
 ```
+
+## Phase 2 Hook Selection
+
+Phase 2 uses a postfix on `NMultiplayerSubmenu.UpdateButtons()` to keep the Host button visible even when vanilla detects a current multiplayer save.
+
+Phase 2 uses a prefix on `NMultiplayerHostSubmenu.StartHost(GameMode)` as the picker insertion point. This method runs after Standard/Daily/Custom has been selected and before `StartHostAsync` starts the vanilla networking flow.
+
+Existing campaign selections activate the campaign payload into `current_run_mp.save`, then call the vanilla loaded-run continuation through `NMultiplayerSubmenu.StartHost(SerializableRun)` where possible.
