@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MultiplayerSaveSlots.Storage;
 
@@ -7,7 +8,8 @@ public static class JsonFile
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() }
     };
 
     public static T Read<T>(string path)
@@ -19,10 +21,13 @@ public static class JsonFile
 
     public static void Write<T>(string path, T value)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)
-            ?? throw new InvalidOperationException($"Path has no directory: {path}"));
+        var directory = Path.GetDirectoryName(path);
+        var tempDirectory = string.IsNullOrEmpty(directory)
+            ? Directory.GetCurrentDirectory()
+            : directory;
+        Directory.CreateDirectory(tempDirectory);
 
-        var tempPath = path + ".tmp";
+        var tempPath = Path.Combine(tempDirectory, Path.GetFileName(path) + ".tmp");
         File.WriteAllText(tempPath, JsonSerializer.Serialize(value, Options));
         File.Move(tempPath, path, overwrite: true);
     }
