@@ -5,6 +5,7 @@ CampaignLabelerTests.Register(tests);
 MultiplayerSaveBankTests.Register(tests);
 ActiveSaveSwitcherTests.Register(tests);
 StorageUtilityTests.Register(tests);
+tests.AddRange(HostFlowControllerTests.All());
 
 var failures = 0;
 foreach (var test in tests)
