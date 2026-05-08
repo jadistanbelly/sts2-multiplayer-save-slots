@@ -2,7 +2,12 @@ using MultiplayerSaveSlots.Core;
 
 namespace MultiplayerSaveSlots.Runtime;
 
-public sealed class SaveSyncController
+public interface ISaveSyncRunner
+{
+    OperationResult SyncAfterVanillaSave();
+}
+
+public sealed class SaveSyncController : ISaveSyncRunner
 {
     private readonly IActiveSaveSync _activeSaveSync;
     private readonly HostFlowSession _session;
