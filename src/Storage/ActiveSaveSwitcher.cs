@@ -19,6 +19,9 @@ public sealed class ActiveSaveSwitcher
         if (!File.Exists(payloadPath))
             throw new FileNotFoundException("Campaign payload is missing", payloadPath);
 
+        var metadata = _bank.GetCampaign(campaignId);
+        _bank.EnsureCampaignIndexed(campaignId);
+
         var activeSaveDirectory = Path.GetDirectoryName(_activeSavePath);
         if (!string.IsNullOrEmpty(activeSaveDirectory))
             Directory.CreateDirectory(activeSaveDirectory);
@@ -30,7 +33,6 @@ public sealed class ActiveSaveSwitcher
         var checksum = FileChecksum.Sha256(_activeSavePath);
         JsonFile.Write(_statePath, new ActiveSaveState(campaignId, checksum, nowUtc));
 
-        var metadata = _bank.GetCampaign(campaignId);
         _bank.UpdateMetadata(metadata with
         {
             ActiveChecksum = checksum,
