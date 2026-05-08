@@ -9,6 +9,7 @@ public sealed class HostFlowController
     private readonly IActiveSavePreflight _preflight;
     private readonly IActiveSaveActivator _activator;
     private readonly IHostFlowContinuation _continuation;
+    private readonly IActiveSaveRecovery _recovery;
     private readonly HostFlowSession _session;
     private readonly IClock _clock;
 
@@ -17,6 +18,7 @@ public sealed class HostFlowController
         IActiveSavePreflight preflight,
         IActiveSaveActivator activator,
         IHostFlowContinuation continuation,
+        IActiveSaveRecovery recovery,
         HostFlowSession session,
         IClock clock)
     {
@@ -24,6 +26,7 @@ public sealed class HostFlowController
         _preflight = preflight;
         _activator = activator;
         _continuation = continuation;
+        _recovery = recovery;
         _session = session;
         _clock = clock;
     }
@@ -35,6 +38,9 @@ public sealed class HostFlowController
 
         return new MultiplayerSavePickerModel(gameMode, rows);
     }
+
+    public ActiveSaveRecoveryModel BuildRecoveryModel(MultiplayerGameMode gameMode) =>
+        _recovery.BuildRecoveryModel(gameMode);
 
     public OperationResult SelectStartNewRun(MultiplayerGameMode gameMode)
     {
@@ -48,6 +54,17 @@ public sealed class HostFlowController
 
         _session.SelectNewRun(gameMode);
         return continuation;
+    }
+
+    public OperationResult RecoverAndSelectStartNewRun(
+        ActiveSaveRecoveryActionKind action,
+        MultiplayerGameMode gameMode)
+    {
+        var recovery = _recovery.Recover(action, gameMode, _clock.UtcNow);
+        if (!recovery.Success)
+            return recovery;
+
+        return SelectStartNewRun(gameMode);
     }
 
     public OperationResult SelectExistingCampaign(string campaignId, MultiplayerGameMode gameMode)
@@ -76,5 +93,17 @@ public sealed class HostFlowController
 
         _session.SelectExistingCampaign(campaignId, gameMode);
         return continuation;
+    }
+
+    public OperationResult RecoverAndSelectExistingCampaign(
+        ActiveSaveRecoveryActionKind action,
+        string campaignId,
+        MultiplayerGameMode gameMode)
+    {
+        var recovery = _recovery.Recover(action, gameMode, _clock.UtcNow);
+        if (!recovery.Success)
+            return recovery;
+
+        return SelectExistingCampaign(campaignId, gameMode);
     }
 }
