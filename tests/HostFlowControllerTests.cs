@@ -33,6 +33,7 @@ public static class HostFlowControllerTests
         yield return new TestCase("controller recovers then starts new run", ControllerRecoversThenStartsNewRun);
         yield return new TestCase("controller recovers then selects existing campaign", ControllerRecoversThenSelectsExistingCampaign);
         yield return new TestCase("controller stops when recovery fails", ControllerStopsWhenRecoveryFails);
+        yield return new TestCase("recovery model reports unavailable when no options exist", RecoveryModelReportsUnavailableWhenNoOptionsExist);
     }
 
     private static void RuntimePathsPlaceBankBesideActiveSave()
@@ -422,6 +423,14 @@ public static class HostFlowControllerTests
         AssertEx.False(result.Success);
         AssertEx.Equal("sync failed", result.ErrorMessage);
         AssertEx.Equal(0, continuation.StartNewRunCount);
+    }
+
+    private static void RecoveryModelReportsUnavailableWhenNoOptionsExist()
+    {
+        var model = ActiveSaveRecoveryModel.None();
+
+        AssertEx.False(model.HasOptions);
+        AssertEx.Equal("No recovery action is available.", model.Message);
     }
 
     private static HostFlowController CreateController(

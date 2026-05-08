@@ -97,6 +97,13 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         if (result.Success)
             return;
 
+        var recovery = _controller.BuildRecoveryModel(_model.GameMode);
+        if (recovery.HasOptions)
+        {
+            MultiplayerSaveRecoveryModal.Show(_controller, _model.GameMode, row, recovery);
+            return;
+        }
+
         ShowError(result.ErrorMessage ?? "Unable to continue multiplayer host flow.");
     }
 

@@ -15,6 +15,7 @@ public static class HostFlowPatchTests
         yield return new TestCase("save manager patch runs sync after vanilla task completes", SaveManagerPatchRunsSyncAfterVanillaTask);
         yield return new TestCase("save manager patch logs sync failure without failing vanilla save", SaveManagerPatchLogsSyncFailure);
         yield return new TestCase("save manager patch propagates vanilla task failure", SaveManagerPatchPropagatesVanillaFailure);
+        yield return new TestCase("recovery modal exposes show method", RecoveryModalExposesShowMethod);
     }
 
     private static void GameModeMapHandlesAllModes()
@@ -139,6 +140,14 @@ public static class HostFlowPatchTests
 
         AssertEx.Throws<InvalidOperationException>(() => wrapped.GetAwaiter().GetResult());
         AssertEx.Equal(0, logs.Count);
+    }
+
+    private static void RecoveryModalExposesShowMethod()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSaveRecoveryModal");
+        AssertEx.True(modalType is not null);
+        var show = modalType!.GetMethod("Show", BindingFlags.Static | BindingFlags.Public);
+        AssertEx.True(show is not null);
     }
 
     private static (FieldInfo ResumingField, MethodInfo Prefix, Type PatchType) GetHostSubmenuPatchMembers()
