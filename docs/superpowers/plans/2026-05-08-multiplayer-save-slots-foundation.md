@@ -54,15 +54,16 @@ This plan implements the first area and produces a discovery report for the patc
 
 ## Prerequisite
 
-- [ ] **Step 1: Verify .NET 9 SDK is installed**
+- [ ] **Step 1: Verify the build can target .NET 9**
 
 Run:
 
 ```bash
-dotnet --list-sdks | rg '^9\.'
+dotnet --info
+find "$HOME/.nuget/packages/microsoft.netcore.app.ref" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' 2>/dev/null | rg '^9\.'
 ```
 
-Expected: at least one `9.x` SDK line. If this fails, install the .NET 9 SDK before implementation. STS2 mod projects in this workspace target `net9.0`, matching the local `autopath` mod shape.
+Expected: a .NET SDK is available and the second command prints at least one `9.x` targeting-pack version. The SDK itself may be .NET 10; the mod still targets `net9.0` because STS2 targets `.NETCoreApp,Version=v9.0` and the local `autopath` mod targets `net9.0`.
 
 ### Task 1: Scaffold Mod Project
 
@@ -1308,7 +1309,7 @@ See `docs/superpowers/specs/2026-05-08-multiplayer-save-slots-design.md`.
 
 ## Build
 
-Requires the .NET 9 SDK and Slay the Spire 2 installed through Steam.
+Requires a .NET SDK that can target `net9.0` and Slay the Spire 2 installed through Steam.
 
 ```bash
 dotnet build MultiplayerSaveSlots.sln
