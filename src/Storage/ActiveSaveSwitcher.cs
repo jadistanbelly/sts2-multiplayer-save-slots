@@ -112,6 +112,43 @@ public sealed class ActiveSaveSwitcher
         }
     }
 
+    public void ClaimActiveSave(string campaignId, DateTimeOffset nowUtc)
+    {
+        if (!File.Exists(_activeSavePath))
+            throw new FileNotFoundException("Active multiplayer save is missing", _activeSavePath);
+
+        var payloadPath = _bank.GetPayloadPath(campaignId);
+        if (!File.Exists(payloadPath))
+            throw new FileNotFoundException("Campaign payload is missing", payloadPath);
+
+        var metadata = _bank.GetCampaign(campaignId);
+        _bank.EnsureCampaignIndexed(campaignId);
+
+        var activeChecksum = FileChecksum.Sha256(_activeSavePath);
+        var payloadChecksum = FileChecksum.Sha256(payloadPath);
+        if (activeChecksum != payloadChecksum)
+            throw new InvalidOperationException("Campaign payload does not match active save");
+
+        string? previousStateBackupPath = null;
+        if (File.Exists(_statePath))
+            previousStateBackupPath = BackupManager.CreateBackup(_statePath, _bank.GetBackupDirectory(campaignId), "before-claim-state", nowUtc);
+
+        JsonFile.Write(_statePath, new ActiveSaveState(
+            campaignId,
+            ActiveChecksumBeforeActivation: null,
+            activeChecksum,
+            nowUtc,
+            PreviousActiveBackupPath: null,
+            previousStateBackupPath));
+
+        _bank.UpdateMetadata(metadata with
+        {
+            ActiveChecksum = activeChecksum,
+            PayloadChecksum = payloadChecksum,
+            LastPlayedAtUtc = nowUtc
+        });
+    }
+
     public void SyncBack(DateTimeOffset nowUtc)
     {
         if (!File.Exists(_statePath))
