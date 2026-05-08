@@ -93,7 +93,7 @@ if [[ "$package_only" == false ]]; then
     die "full release requires a clean worktree"
   fi
 
-  git fetch origin main --tags
+  git fetch origin main:refs/remotes/origin/main --tags
 
   local_main="$(git rev-parse main)"
   remote_main="$(git rev-parse origin/main)"
