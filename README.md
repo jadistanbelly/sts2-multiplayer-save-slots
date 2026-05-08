@@ -1,10 +1,11 @@
 # Multiplayer Save Slots
 
-Slay the Spire 2 mod that lets a host keep multiple multiplayer campaign saves instead of abandoning the single vanilla co-op save.
+Slay the Spire 2 mod in development to let a host keep multiple multiplayer campaign saves instead of abandoning the single vanilla co-op save.
 
 ## Status
 
 Private development. The current implementation phase is focused on the save-bank and active-slot swap foundation.
+No user-facing save picker is complete yet.
 
 ## Design
 
