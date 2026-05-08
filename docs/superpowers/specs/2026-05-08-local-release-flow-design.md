@@ -28,6 +28,8 @@ The user-facing install remains a zip release. Users download the zip, extract t
 
 Add a local release script under `scripts/` and README documentation that describes the exact release process. The script owns validation, build, packaging, tagging, and GitHub Release publication. It assumes the current machine can already build the repo because STS2 is installed at the paths used by `MultiplayerSaveSlots.csproj`.
 
+The script should use `python3` standard-library helpers for manifest JSON parsing and zip creation so it does not depend on a separate `zip` binary.
+
 The flow is intentionally tag-driven but locally executed. A release is only published when the operator passes an explicit version tag such as `v0.1.0`.
 
 ## Release Command Contract
@@ -141,7 +143,7 @@ The final release path should be tested with a real tag only when publishing an 
 README release documentation should include:
 
 - the local STS2 install requirement
-- required tools: `.NET SDK`, `zip`, `git`, and authenticated `gh`
+- required tools: `.NET SDK`, `python3`, `git`, and authenticated `gh`
 - how to update `MultiplayerSaveSlots.json` version before release
 - how to run package-only validation
 - how to publish a tagged release
