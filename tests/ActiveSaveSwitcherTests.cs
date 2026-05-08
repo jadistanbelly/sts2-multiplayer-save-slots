@@ -1,4 +1,5 @@
 using MultiplayerSaveSlots.Core;
+using MultiplayerSaveSlots.Runtime;
 using MultiplayerSaveSlots.Storage;
 using System.Text.Json;
 
@@ -35,6 +36,10 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("switcher claims active save for pending new campaign", ClaimsActiveSaveForPendingNewCampaign));
         tests.Add(new TestCase("switcher claim rejects missing active save", ClaimRejectsMissingActiveSave));
         tests.Add(new TestCase("switcher claim rejects mismatched campaign payload", ClaimRejectsMismatchedCampaignPayload));
+        tests.Add(new TestCase("recovery offers duplicate for unmanaged active save", RecoveryOffersDuplicateForUnmanagedActiveSave));
+        tests.Add(new TestCase("recovery offers sync for unsynced managed active save", RecoveryOffersSyncForUnsyncedManagedActiveSave));
+        tests.Add(new TestCase("recovery duplicates active save into bank", RecoveryDuplicatesActiveSaveIntoBank));
+        tests.Add(new TestCase("recovery syncs active save to selected campaign", RecoverySyncsActiveSaveToSelectedCampaign));
     }
 
     private static void ActivatesCampaign()
@@ -580,6 +585,89 @@ public static class ActiveSaveSwitcherTests
         var switcher = new ActiveSaveSwitcher(bank, active, Path.Combine(temp.Path, "active-state.json"));
 
         AssertEx.Throws<InvalidOperationException>(() => switcher.ClaimActiveSave(metadata.CampaignId, DateTimeOffset.UtcNow));
+    }
+
+    private static void RecoveryOffersDuplicateForUnmanagedActiveSave()
+    {
+        using var temp = new TempDirectory();
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(active, "unmanaged-active");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+        var recovery = new ActiveSaveRecoveryService(bank, switcher, active, state);
+
+        var model = recovery.BuildRecoveryModel(MultiplayerGameMode.Standard);
+
+        AssertEx.True(model.HasOptions);
+        AssertEx.Equal("Current multiplayer save is not managed by Multiplayer Save Slots yet.", model.Message);
+        AssertEx.Equal(ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign, model.Options[0].Kind);
+    }
+
+    private static void RecoveryOffersSyncForUnsyncedManagedActiveSave()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(source, "campaign");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+        switcher.Activate(metadata.CampaignId, DateTimeOffset.UtcNow);
+        File.WriteAllText(active, "campaign-progress");
+        var recovery = new ActiveSaveRecoveryService(bank, switcher, active, state);
+
+        var model = recovery.BuildRecoveryModel(MultiplayerGameMode.Standard);
+
+        AssertEx.True(model.HasOptions);
+        AssertEx.Equal("Active multiplayer save has unsynced changes", model.Title);
+        AssertEx.Equal(ActiveSaveRecoveryActionKind.SyncActiveToCampaign, model.Options[0].Kind);
+    }
+
+    private static void RecoveryDuplicatesActiveSaveIntoBank()
+    {
+        using var temp = new TempDirectory();
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(active, "unmanaged-active");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+        var recovery = new ActiveSaveRecoveryService(bank, switcher, active, state);
+
+        var result = recovery.Recover(
+            ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign,
+            MultiplayerGameMode.Standard,
+            new DateTimeOffset(2026, 5, 8, 17, 0, 0, TimeSpan.Zero));
+
+        AssertEx.True(result.Success);
+        var campaigns = bank.ListCampaigns(MultiplayerGameMode.Standard);
+        AssertEx.Equal(1, campaigns.Count);
+        AssertEx.Equal("unmanaged-active", File.ReadAllText(bank.GetPayloadPath(campaigns[0].CampaignId)));
+        AssertEx.Equal(campaigns[0].CampaignId, JsonFile.Read<ActiveSaveState>(state).CampaignId);
+    }
+
+    private static void RecoverySyncsActiveSaveToSelectedCampaign()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(source, "campaign");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+        switcher.Activate(metadata.CampaignId, DateTimeOffset.UtcNow);
+        File.WriteAllText(active, "campaign-progress");
+        var recovery = new ActiveSaveRecoveryService(bank, switcher, active, state);
+
+        var result = recovery.Recover(
+            ActiveSaveRecoveryActionKind.SyncActiveToCampaign,
+            MultiplayerGameMode.Standard,
+            new DateTimeOffset(2026, 5, 8, 17, 30, 0, TimeSpan.Zero));
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal("campaign-progress", File.ReadAllText(bank.GetPayloadPath(metadata.CampaignId)));
     }
 
     private static string SingleFile(string directory)
