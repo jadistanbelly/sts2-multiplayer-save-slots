@@ -1,5 +1,6 @@
 using MultiplayerSaveSlots.Core;
 using MultiplayerSaveSlots.Runtime;
+using MultiplayerSaveSlots.UI;
 
 namespace MultiplayerSaveSlots.Tests;
 
@@ -11,6 +12,10 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session tracks existing campaign selection", SessionTracksExistingCampaignSelection);
         yield return new TestCase("host flow session tracks pending new run", SessionTracksPendingNewRun);
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
+        yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
+        yield return new TestCase("controller starts new run through continuation", ControllerStartsNewRunThroughContinuation);
+        yield return new TestCase("controller activates existing campaign before load continuation", ControllerActivatesExistingCampaign);
+        yield return new TestCase("controller does not continue when activation fails", ControllerStopsWhenActivationFails);
     }
 
     private static void RuntimePathsPlaceBankBesideActiveSave()
@@ -64,5 +69,141 @@ public static class HostFlowControllerTests
         AssertEx.Equal(null, session.SelectedCampaignId);
         AssertEx.Equal(null, session.SelectedGameMode);
         AssertEx.False(session.IsPendingNewRun);
+    }
+
+    private static void ControllerBuildsPickerModel()
+    {
+        var bank = new FakeHostFlowSaveBank
+        {
+            Campaigns =
+            [
+                new CampaignMetadata(
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    MultiplayerGameMode.Standard,
+                    "buddy1 + buddy2",
+                    [new PlayerIdentity("1", "buddy1"), new PlayerIdentity("2", "buddy2")],
+                    DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+                    DateTimeOffset.Parse("2026-05-08T01:00:00Z"),
+                    null,
+                    "checksum",
+                    "Floor 7")
+            ]
+        };
+        var controller = CreateController(bank);
+
+        var model = controller.BuildPickerModel(MultiplayerGameMode.Standard);
+
+        AssertEx.Equal(MultiplayerGameMode.Standard, model.GameMode);
+        AssertEx.Equal(2, model.Rows.Count);
+        AssertEx.Equal(PickerRowKind.StartNewRun, model.Rows[0].Kind);
+        AssertEx.Equal("Start New Run", model.Rows[0].Title);
+        AssertEx.Equal(PickerRowKind.Campaign, model.Rows[1].Kind);
+        AssertEx.Equal("buddy1 + buddy2", model.Rows[1].Title);
+        AssertEx.Equal("Floor 7 - 2 players", model.Rows[1].Subtitle);
+    }
+
+    private static void ControllerStartsNewRunThroughContinuation()
+    {
+        var continuation = new FakeHostFlowContinuation();
+        var session = new HostFlowSession();
+        var controller = CreateController(new FakeHostFlowSaveBank(), continuation: continuation, session: session);
+
+        var result = controller.SelectStartNewRun(MultiplayerGameMode.Daily);
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal(MultiplayerGameMode.Daily, session.SelectedGameMode);
+        AssertEx.True(session.IsPendingNewRun);
+        AssertEx.Equal(1, continuation.StartNewRunCount);
+        AssertEx.Equal(0, continuation.LoadExistingCount);
+    }
+
+    private static void ControllerActivatesExistingCampaign()
+    {
+        var activator = new FakeActiveSaveActivator();
+        var continuation = new FakeHostFlowContinuation();
+        var session = new HostFlowSession();
+        var controller = CreateController(new FakeHostFlowSaveBank(), activator, continuation, session);
+
+        var result = controller.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", activator.ActivatedCampaignId);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", session.SelectedCampaignId);
+        AssertEx.Equal(0, continuation.StartNewRunCount);
+        AssertEx.Equal(1, continuation.LoadExistingCount);
+    }
+
+    private static void ControllerStopsWhenActivationFails()
+    {
+        var activator = new FakeActiveSaveActivator { Failure = "Active save has unsynced changes" };
+        var continuation = new FakeHostFlowContinuation();
+        var controller = CreateController(new FakeHostFlowSaveBank(), activator, continuation);
+
+        var result = controller.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("Active save has unsynced changes", result.ErrorMessage);
+        AssertEx.Equal(0, continuation.StartNewRunCount);
+        AssertEx.Equal(0, continuation.LoadExistingCount);
+    }
+
+    private static HostFlowController CreateController(
+        FakeHostFlowSaveBank? bank = null,
+        FakeActiveSaveActivator? activator = null,
+        FakeHostFlowContinuation? continuation = null,
+        HostFlowSession? session = null)
+    {
+        return new HostFlowController(
+            bank ?? new FakeHostFlowSaveBank(),
+            activator ?? new FakeActiveSaveActivator(),
+            continuation ?? new FakeHostFlowContinuation(),
+            session ?? new HostFlowSession(),
+            new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")));
+    }
+
+    private sealed class FixedClock(DateTimeOffset utcNow) : IClock
+    {
+        public DateTimeOffset UtcNow { get; } = utcNow;
+    }
+
+    private sealed class FakeHostFlowSaveBank : IHostFlowSaveBank
+    {
+        public IReadOnlyList<CampaignMetadata> Campaigns { get; init; } = [];
+
+        public IReadOnlyList<CampaignMetadata> ListCampaigns(MultiplayerGameMode gameMode) =>
+            Campaigns.Where(campaign => campaign.GameMode == gameMode).ToList();
+    }
+
+    private sealed class FakeActiveSaveActivator : IActiveSaveActivator
+    {
+        public string? ActivatedCampaignId { get; private set; }
+        public string? Failure { get; init; }
+
+        public OperationResult Activate(string campaignId, DateTimeOffset nowUtc)
+        {
+            if (Failure is not null)
+                return OperationResult.Fail(Failure);
+
+            ActivatedCampaignId = campaignId;
+            return OperationResult.Ok();
+        }
+    }
+
+    private sealed class FakeHostFlowContinuation : IHostFlowContinuation
+    {
+        public int StartNewRunCount { get; private set; }
+        public int LoadExistingCount { get; private set; }
+
+        public OperationResult StartNewRun(MultiplayerGameMode gameMode)
+        {
+            StartNewRunCount++;
+            return OperationResult.Ok();
+        }
+
+        public OperationResult LoadExistingRun()
+        {
+            LoadExistingCount++;
+            return OperationResult.Ok();
+        }
     }
 }
