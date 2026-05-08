@@ -30,6 +30,46 @@ DOTNET_ROLL_FORWARD=Major dotnet build MultiplayerSaveSlots.sln
 DOTNET_ROLL_FORWARD=Major dotnet run --project tests/MultiplayerSaveSlots.Tests.csproj
 ```
 
+## Release
+
+Releases are built locally because the project references STS2 assemblies from a local game install. A normal GitHub-hosted runner does not have `sts2.dll`, `GodotSharp.dll`, or `0Harmony.dll`.
+
+Required local tools:
+
+- .NET SDK that can target `net9.0`
+- `python3`
+- `git`
+- authenticated GitHub CLI: `gh auth login`
+- Slay the Spire 2 installed in the path used by `MultiplayerSaveSlots.csproj`
+
+Before publishing a release, update `MultiplayerSaveSlots.json` so its `version` matches the release tag without the leading `v`.
+
+Validate the package without creating a tag or GitHub Release:
+
+```bash
+scripts/release-local.sh --package-only v0.1.0
+```
+
+Publish a real release from a clean, synced `main` checkout:
+
+```bash
+scripts/release-local.sh v0.1.0
+```
+
+The published asset is a drop-in zip named `MultiplayerSaveSlots-vX.Y.Z.zip`. Users should extract the included `MultiplayerSaveSlots/` folder into their STS2 mods directory.
+
+Future operator prompt contract:
+
+```text
+When I say "merge PR #N and tag vX.Y.Z":
+1. Merge PR #N.
+2. Update local main with a fast-forward pull.
+3. Confirm main is clean and synced with origin/main.
+4. Confirm MultiplayerSaveSlots.json has version X.Y.Z.
+5. Run scripts/release-local.sh vX.Y.Z.
+6. Report the GitHub Release URL and zip asset name.
+```
+
 ## In-Game Smoke Test
 
 1. Build the mod.
