@@ -208,3 +208,9 @@ Phase 2 uses a postfix on `NMultiplayerSubmenu.UpdateButtons()` to keep the Host
 Phase 2 uses a prefix on `NMultiplayerHostSubmenu.StartHost(GameMode)` as the picker insertion point. This method runs after Standard/Daily/Custom has been selected and before `StartHostAsync` starts the vanilla networking flow.
 
 Existing campaign selections activate the campaign payload into `current_run_mp.save`, then call the vanilla loaded-run continuation through `NMultiplayerSubmenu.StartHost(SerializableRun)` where possible.
+
+## Phase 3 Hook Selection
+
+Phase 3 uses a postfix on `SaveManager.SaveRun(AbstractRoom?, bool)` and wraps the returned `Task`. This keeps vanilla error handling intact and runs Multiplayer Save Slots sync only after STS2 has completed its save batch.
+
+The lower-level `RunSaveManager.SaveRun(AbstractRoom?)` is the method that writes `current_run_mp.save` and raises `Saved`, but patching the facade gives the mod one point after progress save batching and current-save task serialization.
