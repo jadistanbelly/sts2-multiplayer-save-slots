@@ -116,7 +116,7 @@ info "building Release configuration"
 DOTNET_ROLL_FORWARD=Major dotnet build "$solution_path" -c Release
 
 info "running tests"
-DOTNET_ROLL_FORWARD=Major dotnet run --project "$test_project"
+DOTNET_ROLL_FORWARD=Major dotnet run --project "$test_project" -c Release
 
 [[ -f "$dll_path" ]] || die "expected built DLL at $dll_path"
 
@@ -171,6 +171,10 @@ PY
 if [[ "$package_only" == true ]]; then
   info "package-only release artifact ready: $zip_path"
   exit 0
+fi
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  die "full release requires a clean worktree before tagging"
 fi
 
 info "creating annotated tag $tag"
