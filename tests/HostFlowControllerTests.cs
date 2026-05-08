@@ -29,6 +29,10 @@ public static class HostFlowControllerTests
         yield return new TestCase("save sync finalizes pending new run", SaveSyncFinalizesPendingNewRun);
         yield return new TestCase("save sync keeps pending new run selected when finalization fails", SaveSyncKeepsPendingNewRunWhenFinalizationFails);
         yield return new TestCase("save sync maps sync exceptions to failed result", SaveSyncMapsExceptions);
+        yield return new TestCase("controller exposes recovery model", ControllerExposesRecoveryModel);
+        yield return new TestCase("controller recovers then starts new run", ControllerRecoversThenStartsNewRun);
+        yield return new TestCase("controller recovers then selects existing campaign", ControllerRecoversThenSelectsExistingCampaign);
+        yield return new TestCase("controller stops when recovery fails", ControllerStopsWhenRecoveryFails);
     }
 
     private static void RuntimePathsPlaceBankBesideActiveSave()
@@ -351,18 +355,89 @@ public static class HostFlowControllerTests
         AssertEx.Equal("sync exploded", result.ErrorMessage);
     }
 
+    private static void ControllerExposesRecoveryModel()
+    {
+        var recovery = new FakeActiveSaveRecovery();
+        var controller = CreateController(new FakeHostFlowSaveBank(), recovery: recovery);
+
+        var model = controller.BuildRecoveryModel(MultiplayerGameMode.Standard);
+
+        AssertEx.Equal("Active multiplayer save needs attention", model.Title);
+        AssertEx.Equal(1, model.Options.Count);
+        AssertEx.Equal(ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign, model.Options[0].Kind);
+        AssertEx.Equal(MultiplayerGameMode.Standard, recovery.LastBuildGameMode);
+    }
+
+    private static void ControllerRecoversThenStartsNewRun()
+    {
+        var recovery = new FakeActiveSaveRecovery();
+        var continuation = new FakeHostFlowContinuation();
+        var controller = CreateController(
+            new FakeHostFlowSaveBank(),
+            continuation: continuation,
+            recovery: recovery);
+
+        var result = controller.RecoverAndSelectStartNewRun(
+            ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign,
+            MultiplayerGameMode.Custom);
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal(ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign, recovery.LastRecoveredAction);
+        AssertEx.Equal(MultiplayerGameMode.Custom, recovery.LastRecoveredGameMode);
+        AssertEx.Equal(1, continuation.StartNewRunCount);
+    }
+
+    private static void ControllerRecoversThenSelectsExistingCampaign()
+    {
+        var recovery = new FakeActiveSaveRecovery();
+        var activator = new FakeActiveSaveActivator();
+        var continuation = new FakeHostFlowContinuation();
+        var controller = CreateController(
+            new FakeHostFlowSaveBank(),
+            activator,
+            continuation,
+            recovery: recovery);
+
+        var result = controller.RecoverAndSelectExistingCampaign(
+            ActiveSaveRecoveryActionKind.SyncActiveToCampaign,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard);
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal(ActiveSaveRecoveryActionKind.SyncActiveToCampaign, recovery.LastRecoveredAction);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", activator.ActivatedCampaignId);
+        AssertEx.Equal(1, continuation.LoadExistingCount);
+    }
+
+    private static void ControllerStopsWhenRecoveryFails()
+    {
+        var recovery = new FakeActiveSaveRecovery { Failure = "sync failed" };
+        var continuation = new FakeHostFlowContinuation();
+        var controller = CreateController(new FakeHostFlowSaveBank(), continuation: continuation, recovery: recovery);
+
+        var result = controller.RecoverAndSelectStartNewRun(
+            ActiveSaveRecoveryActionKind.SyncActiveToCampaign,
+            MultiplayerGameMode.Daily);
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("sync failed", result.ErrorMessage);
+        AssertEx.Equal(0, continuation.StartNewRunCount);
+    }
+
     private static HostFlowController CreateController(
         FakeHostFlowSaveBank? bank = null,
         FakeActiveSaveActivator? activator = null,
         FakeHostFlowContinuation? continuation = null,
         HostFlowSession? session = null,
-        FakeActiveSavePreflight? preflight = null)
+        FakeActiveSavePreflight? preflight = null,
+        FakeActiveSaveRecovery? recovery = null)
     {
         return new HostFlowController(
             bank ?? new FakeHostFlowSaveBank(),
             preflight ?? new FakeActiveSavePreflight(),
             activator ?? new FakeActiveSaveActivator(),
             continuation ?? new FakeHostFlowContinuation(),
+            recovery ?? new FakeActiveSaveRecovery(),
             session ?? new HostFlowSession(),
             new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")));
     }
@@ -446,9 +521,48 @@ public static class HostFlowControllerTests
     private sealed class FakeActiveSavePreflight : IActiveSavePreflight
     {
         public string? Failure { get; init; }
+        public int FailuresBeforeSuccess { get; init; } = int.MaxValue;
+        private int _calls;
 
-        public OperationResult EnsureActiveSaveCanBeReplaced() =>
-            Failure is null ? OperationResult.Ok() : OperationResult.Fail(Failure);
+        public OperationResult EnsureActiveSaveCanBeReplaced()
+        {
+            _calls++;
+            return Failure is not null && _calls <= FailuresBeforeSuccess
+                ? OperationResult.Fail(Failure)
+                : OperationResult.Ok();
+        }
+    }
+
+    private sealed class FakeActiveSaveRecovery : IActiveSaveRecovery
+    {
+        public string? Failure { get; init; }
+        public MultiplayerGameMode? LastBuildGameMode { get; private set; }
+        public ActiveSaveRecoveryActionKind? LastRecoveredAction { get; private set; }
+        public MultiplayerGameMode? LastRecoveredGameMode { get; private set; }
+
+        public ActiveSaveRecoveryModel BuildRecoveryModel(MultiplayerGameMode gameMode)
+        {
+            LastBuildGameMode = gameMode;
+            return new ActiveSaveRecoveryModel(
+                "Active multiplayer save needs attention",
+                "Choose how to protect the current active multiplayer save before continuing.",
+                [
+                    new ActiveSaveRecoveryOption(
+                        ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign,
+                        "Duplicate Active Save",
+                        "Copy the current active save into the Multiplayer Save Slots bank.")
+                ]);
+        }
+
+        public OperationResult Recover(ActiveSaveRecoveryActionKind action, MultiplayerGameMode gameMode, DateTimeOffset nowUtc)
+        {
+            if (Failure is not null)
+                return OperationResult.Fail(Failure);
+
+            LastRecoveredAction = action;
+            LastRecoveredGameMode = gameMode;
+            return OperationResult.Ok();
+        }
     }
 
     private sealed class FakeActiveSaveSync : IActiveSaveSync

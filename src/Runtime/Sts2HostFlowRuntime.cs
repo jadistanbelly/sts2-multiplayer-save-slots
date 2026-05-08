@@ -90,6 +90,7 @@ public static class Sts2HostFlowRuntime
             new ActiveSaveReplacementGuard(paths.ActiveSavePath, paths.ActiveStatePath),
             new DelegateActiveSaveActivator(switcher.Activate, switcher.RestorePreviousActive),
             new Sts2HostFlowContinuation(hostSubmenu),
+            new NoActiveSaveRecovery(),
             Session,
             new SystemClock());
     }
