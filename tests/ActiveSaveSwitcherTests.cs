@@ -32,6 +32,9 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("switcher restore fails before mutating when previous state backup is missing", RestoreFailsBeforeMutatingWhenPreviousStateBackupMissing));
         tests.Add(new TestCase("switcher sync-back fails before mutating payload when metadata is missing", SyncBackMissingMetadataFailsBeforeMutatingPayload));
         tests.Add(new TestCase("switcher sync-back fails before mutating payload when metadata is malformed", SyncBackMalformedMetadataFailsBeforeMutatingPayload));
+        tests.Add(new TestCase("switcher claims active save for pending new campaign", ClaimsActiveSaveForPendingNewCampaign));
+        tests.Add(new TestCase("switcher claim rejects missing active save", ClaimRejectsMissingActiveSave));
+        tests.Add(new TestCase("switcher claim rejects mismatched campaign payload", ClaimRejectsMismatchedCampaignPayload));
     }
 
     private static void ActivatesCampaign()
@@ -523,6 +526,60 @@ public static class ActiveSaveSwitcherTests
 
         AssertEx.Throws<JsonException>(() => switcher.SyncBack(DateTimeOffset.UtcNow));
         AssertEx.Equal("campaign", File.ReadAllText(bank.GetPayloadPath(metadata.CampaignId)));
+    }
+
+    private static void ClaimsActiveSaveForPendingNewCampaign()
+    {
+        using var temp = new TempDirectory();
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(active, "new-campaign");
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], active, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+        var now = new DateTimeOffset(2026, 5, 8, 16, 0, 0, TimeSpan.Zero);
+
+        switcher.ClaimActiveSave(metadata.CampaignId, now);
+
+        var activeState = JsonFile.Read<ActiveSaveState>(state);
+        AssertEx.Equal(metadata.CampaignId, activeState.CampaignId);
+        AssertEx.Equal(null, activeState.ActiveChecksumBeforeActivation);
+        AssertEx.Equal(FileChecksum.Sha256(active), activeState.ActiveChecksumAfterActivation);
+
+        var updated = bank.GetCampaign(metadata.CampaignId);
+        AssertEx.Equal(FileChecksum.Sha256(active), updated.ActiveChecksum);
+        AssertEx.Equal(FileChecksum.Sha256(bank.GetPayloadPath(metadata.CampaignId)), updated.PayloadChecksum);
+        AssertEx.Equal(now, updated.LastPlayedAtUtc);
+    }
+
+    private static void ClaimRejectsMissingActiveSave()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        File.WriteAllText(source, "new-campaign");
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, Path.Combine(temp.Path, "active-state.json"));
+
+        AssertEx.Throws<FileNotFoundException>(() => switcher.ClaimActiveSave(metadata.CampaignId, DateTimeOffset.UtcNow));
+    }
+
+    private static void ClaimRejectsMismatchedCampaignPayload()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        File.WriteAllText(source, "bank-payload");
+        File.WriteAllText(active, "active-payload");
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, Path.Combine(temp.Path, "active-state.json"));
+
+        AssertEx.Throws<InvalidOperationException>(() => switcher.ClaimActiveSave(metadata.CampaignId, DateTimeOffset.UtcNow));
     }
 
     private static string SingleFile(string directory)

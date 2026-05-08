@@ -24,6 +24,11 @@ public static class HostFlowControllerTests
         yield return new TestCase("controller reports rollback failure after existing load continuation fails", ControllerReportsRollbackFailureWhenLoadFails);
         yield return new TestCase("controller does not select session when existing load continuation fails", ControllerStopsSessionSelectionWhenLoadFails);
         yield return new TestCase("active save activator maps exceptions to failed result", ActiveSaveActivatorMapsExceptions);
+        yield return new TestCase("save sync no-ops without selected campaign", SaveSyncNoOpsWithoutSelection);
+        yield return new TestCase("save sync syncs existing selected campaign", SaveSyncSyncsExistingSelection);
+        yield return new TestCase("save sync finalizes pending new run", SaveSyncFinalizesPendingNewRun);
+        yield return new TestCase("save sync keeps pending new run selected when finalization fails", SaveSyncKeepsPendingNewRunWhenFinalizationFails);
+        yield return new TestCase("save sync maps sync exceptions to failed result", SaveSyncMapsExceptions);
     }
 
     private static void RuntimePathsPlaceBankBesideActiveSave()
@@ -270,6 +275,82 @@ public static class HostFlowControllerTests
         AssertEx.False(session.IsPendingNewRun);
     }
 
+    private static void SaveSyncNoOpsWithoutSelection()
+    {
+        var sync = new FakeActiveSaveSync();
+        var session = new HostFlowSession();
+        var controller = new SaveSyncController(sync, session, new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")));
+
+        var result = controller.SyncAfterVanillaSave();
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal(0, sync.SyncBackCount);
+        AssertEx.Equal(0, sync.FinalizeCount);
+    }
+
+    private static void SaveSyncSyncsExistingSelection()
+    {
+        var sync = new FakeActiveSaveSync();
+        var session = new HostFlowSession();
+        session.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+        var controller = new SaveSyncController(sync, session, new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")));
+
+        var result = controller.SyncAfterVanillaSave();
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal(1, sync.SyncBackCount);
+        AssertEx.Equal(0, sync.FinalizeCount);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", session.SelectedCampaignId);
+        AssertEx.False(session.IsPendingNewRun);
+    }
+
+    private static void SaveSyncFinalizesPendingNewRun()
+    {
+        var sync = new FakeActiveSaveSync { FinalizedCampaignId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" };
+        var session = new HostFlowSession();
+        session.SelectNewRun(MultiplayerGameMode.Custom);
+        var controller = new SaveSyncController(sync, session, new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")));
+
+        var result = controller.SyncAfterVanillaSave();
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal(0, sync.SyncBackCount);
+        AssertEx.Equal(1, sync.FinalizeCount);
+        AssertEx.Equal(MultiplayerGameMode.Custom, sync.FinalizedGameMode);
+        AssertEx.Equal("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", session.SelectedCampaignId);
+        AssertEx.Equal(MultiplayerGameMode.Custom, session.SelectedGameMode);
+        AssertEx.False(session.IsPendingNewRun);
+    }
+
+    private static void SaveSyncKeepsPendingNewRunWhenFinalizationFails()
+    {
+        var sync = new FakeActiveSaveSync { FinalizeFailure = "active save is missing" };
+        var session = new HostFlowSession();
+        session.SelectNewRun(MultiplayerGameMode.Daily);
+        var controller = new SaveSyncController(sync, session, new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")));
+
+        var result = controller.SyncAfterVanillaSave();
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("active save is missing", result.ErrorMessage);
+        AssertEx.Equal(null, session.SelectedCampaignId);
+        AssertEx.Equal(MultiplayerGameMode.Daily, session.SelectedGameMode);
+        AssertEx.True(session.IsPendingNewRun);
+    }
+
+    private static void SaveSyncMapsExceptions()
+    {
+        var sync = new ThrowingActiveSaveSync();
+        var session = new HostFlowSession();
+        session.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+        var controller = new SaveSyncController(sync, session, new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")));
+
+        var result = controller.SyncAfterVanillaSave();
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("sync exploded", result.ErrorMessage);
+    }
+
     private static HostFlowController CreateController(
         FakeHostFlowSaveBank? bank = null,
         FakeActiveSaveActivator? activator = null,
@@ -368,5 +449,37 @@ public static class HostFlowControllerTests
 
         public OperationResult EnsureActiveSaveCanBeReplaced() =>
             Failure is null ? OperationResult.Ok() : OperationResult.Fail(Failure);
+    }
+
+    private sealed class FakeActiveSaveSync : IActiveSaveSync
+    {
+        public int SyncBackCount { get; private set; }
+        public int FinalizeCount { get; private set; }
+        public string FinalizedCampaignId { get; init; } = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        public string? FinalizeFailure { get; init; }
+        public MultiplayerGameMode? FinalizedGameMode { get; private set; }
+
+        public OperationResult SyncBack(DateTimeOffset nowUtc)
+        {
+            SyncBackCount++;
+            return OperationResult.Ok();
+        }
+
+        public OperationResult<string> FinalizePendingNewRun(MultiplayerGameMode gameMode, DateTimeOffset nowUtc)
+        {
+            FinalizeCount++;
+            FinalizedGameMode = gameMode;
+            return FinalizeFailure is null
+                ? OperationResult<string>.Ok(FinalizedCampaignId)
+                : OperationResult<string>.Fail(FinalizeFailure);
+        }
+    }
+
+    private sealed class ThrowingActiveSaveSync : IActiveSaveSync
+    {
+        public OperationResult SyncBack(DateTimeOffset nowUtc) => throw new InvalidOperationException("sync exploded");
+
+        public OperationResult<string> FinalizePendingNewRun(MultiplayerGameMode gameMode, DateTimeOffset nowUtc) =>
+            throw new InvalidOperationException("finalize exploded");
     }
 }

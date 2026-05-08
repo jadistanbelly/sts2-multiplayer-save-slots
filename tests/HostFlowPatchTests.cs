@@ -1,5 +1,6 @@
 using System.Reflection;
 using MultiplayerSaveSlots.Core;
+using MultiplayerSaveSlots.Patches;
 using MultiplayerSaveSlots.Runtime;
 
 namespace MultiplayerSaveSlots.Tests;
@@ -11,6 +12,9 @@ public static class HostFlowPatchTests
         yield return new TestCase("game mode map handles standard daily and custom", GameModeMapHandlesAllModes);
         yield return new TestCase("host submenu prefix allows vanilla while resuming", HostSubmenuPrefixAllowsVanillaWhileResuming);
         yield return new TestCase("host submenu prefix blocks vanilla when picker setup fails", HostSubmenuPrefixBlocksVanillaWhenPickerSetupFails);
+        yield return new TestCase("save manager patch runs sync after vanilla task completes", SaveManagerPatchRunsSyncAfterVanillaTask);
+        yield return new TestCase("save manager patch logs sync failure without failing vanilla save", SaveManagerPatchLogsSyncFailure);
+        yield return new TestCase("save manager patch propagates vanilla task failure", SaveManagerPatchPropagatesVanillaFailure);
     }
 
     private static void GameModeMapHandlesAllModes()
@@ -87,6 +91,56 @@ public static class HostFlowPatchTests
         AssertEx.Equal(false, result);
     }
 
+    private static void SaveManagerPatchRunsSyncAfterVanillaTask()
+    {
+        var vanilla = Task.CompletedTask;
+        var syncCount = 0;
+        var logs = new List<string>();
+
+        var wrapped = SaveManagerPatch.AppendSync(
+            vanilla,
+            () => new FakeSaveSyncController(() =>
+            {
+                syncCount++;
+                return OperationResult.Ok();
+            }),
+            logs.Add);
+
+        wrapped.GetAwaiter().GetResult();
+
+        AssertEx.Equal(1, syncCount);
+        AssertEx.Equal(0, logs.Count);
+    }
+
+    private static void SaveManagerPatchLogsSyncFailure()
+    {
+        var logs = new List<string>();
+
+        var wrapped = SaveManagerPatch.AppendSync(
+            Task.CompletedTask,
+            () => new FakeSaveSyncController(() => OperationResult.Fail("sync failed")),
+            logs.Add);
+
+        wrapped.GetAwaiter().GetResult();
+
+        AssertEx.Equal(1, logs.Count);
+        AssertEx.Equal("[MultiplayerSaveSlots] Save sync failed: sync failed", logs[0]);
+    }
+
+    private static void SaveManagerPatchPropagatesVanillaFailure()
+    {
+        var logs = new List<string>();
+        var vanilla = Task.FromException(new InvalidOperationException("vanilla failed"));
+
+        var wrapped = SaveManagerPatch.AppendSync(
+            vanilla,
+            () => new FakeSaveSyncController(() => OperationResult.Ok()),
+            logs.Add);
+
+        AssertEx.Throws<InvalidOperationException>(() => wrapped.GetAwaiter().GetResult());
+        AssertEx.Equal(0, logs.Count);
+    }
+
     private static (FieldInfo ResumingField, MethodInfo Prefix, Type PatchType) GetHostSubmenuPatchMembers()
     {
         var patchType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.Patches.MultiplayerHostSubmenuPatch")
@@ -97,5 +151,17 @@ public static class HostFlowPatchTests
             ?? throw new InvalidOperationException("Host submenu prefix was not found");
 
         return (resumingField, prefix, patchType);
+    }
+
+    private sealed class FakeSaveSyncController : ISaveSyncRunner
+    {
+        private readonly Func<OperationResult> _sync;
+
+        public FakeSaveSyncController(Func<OperationResult> sync)
+        {
+            _sync = sync;
+        }
+
+        public OperationResult SyncAfterVanillaSave() => _sync();
     }
 }

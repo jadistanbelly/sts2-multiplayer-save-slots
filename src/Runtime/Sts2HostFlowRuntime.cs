@@ -27,6 +27,50 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
         _bank.ListCampaigns(gameMode);
 }
 
+public sealed class Sts2ActiveSaveSync : IActiveSaveSync
+{
+    private readonly MultiplayerSaveBank _bank;
+    private readonly ActiveSaveSwitcher _switcher;
+    private readonly string _activeSavePath;
+
+    public Sts2ActiveSaveSync(MultiplayerSaveBank bank, ActiveSaveSwitcher switcher, string activeSavePath)
+    {
+        _bank = bank;
+        _switcher = switcher;
+        _activeSavePath = activeSavePath;
+    }
+
+    public OperationResult SyncBack(DateTimeOffset nowUtc)
+    {
+        try
+        {
+            _switcher.SyncBack(nowUtc);
+            return OperationResult.Ok();
+        }
+        catch (Exception ex)
+        {
+            return OperationResult.Fail(ex.Message);
+        }
+    }
+
+    public OperationResult<string> FinalizePendingNewRun(MultiplayerGameMode gameMode, DateTimeOffset nowUtc)
+    {
+        try
+        {
+            if (!File.Exists(_activeSavePath))
+                return OperationResult<string>.Fail("Active multiplayer save is missing");
+
+            var metadata = _bank.CreateCampaign(new CampaignCreateRequest(gameMode, [], _activeSavePath, nowUtc));
+            _switcher.ClaimActiveSave(metadata.CampaignId, nowUtc);
+            return OperationResult<string>.Ok(metadata.CampaignId);
+        }
+        catch (Exception ex)
+        {
+            return OperationResult<string>.Fail(ex.Message);
+        }
+    }
+}
+
 public static class Sts2HostFlowRuntime
 {
     public static HostFlowSession Session { get; } = new();
@@ -46,6 +90,17 @@ public static class Sts2HostFlowRuntime
             new ActiveSaveReplacementGuard(paths.ActiveSavePath, paths.ActiveStatePath),
             new DelegateActiveSaveActivator(switcher.Activate, switcher.RestorePreviousActive),
             new Sts2HostFlowContinuation(hostSubmenu),
+            Session,
+            new SystemClock());
+    }
+
+    public static SaveSyncController CreateSaveSyncController()
+    {
+        var paths = CreatePaths();
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(paths.BankRootDirectory));
+        var switcher = new ActiveSaveSwitcher(bank, paths.ActiveSavePath, paths.ActiveStatePath);
+        return new SaveSyncController(
+            new Sts2ActiveSaveSync(bank, switcher, paths.ActiveSavePath),
             Session,
             new SystemClock());
     }
