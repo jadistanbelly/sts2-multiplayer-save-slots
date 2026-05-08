@@ -19,8 +19,9 @@ public sealed class ActiveSaveSwitcher
         if (!File.Exists(payloadPath))
             throw new FileNotFoundException("Campaign payload is missing", payloadPath);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(_activeSavePath)
-            ?? throw new InvalidOperationException($"Active save path has no directory: {_activeSavePath}"));
+        var activeSaveDirectory = Path.GetDirectoryName(_activeSavePath);
+        if (!string.IsNullOrEmpty(activeSaveDirectory))
+            Directory.CreateDirectory(activeSaveDirectory);
 
         if (File.Exists(_activeSavePath))
             BackupManager.CreateBackup(_activeSavePath, _bank.GetBackupDirectory(campaignId), "before-activate-active", nowUtc);
@@ -51,10 +52,12 @@ public sealed class ActiveSaveSwitcher
         if (!File.Exists(payloadPath))
             throw new FileNotFoundException("Campaign payload is missing", payloadPath);
 
+        var metadata = _bank.GetCampaign(state.CampaignId);
+        _bank.EnsureCampaignIndexed(state.CampaignId);
+
         BackupManager.CreateBackup(payloadPath, _bank.GetBackupDirectory(state.CampaignId), "before-sync-bank", nowUtc);
         File.Copy(_activeSavePath, payloadPath, overwrite: true);
 
-        var metadata = _bank.GetCampaign(state.CampaignId);
         _bank.UpdateMetadata(metadata with
         {
             ActiveChecksum = FileChecksum.Sha256(_activeSavePath),

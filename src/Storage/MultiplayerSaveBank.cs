@@ -68,11 +68,16 @@ public sealed class MultiplayerSaveBank
 
     public void UpdateMetadata(CampaignMetadata metadata)
     {
-        EnsureCreated();
-        if (!ReadIndex().CampaignIds.Contains(metadata.CampaignId))
-            throw new InvalidOperationException($"Campaign {metadata.CampaignId} is not indexed.");
+        EnsureCampaignIndexed(metadata.CampaignId);
 
         JsonFile.Write(_paths.MetadataPath(metadata.CampaignId), metadata);
+    }
+
+    internal void EnsureCampaignIndexed(string campaignId)
+    {
+        EnsureCreated();
+        if (!ReadIndex().CampaignIds.Contains(campaignId))
+            throw new InvalidOperationException($"Campaign {campaignId} is not indexed.");
     }
 
     private void EnsureCreated()
