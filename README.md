@@ -4,9 +4,11 @@ Slay the Spire 2 mod in development to let a host keep multiple multiplayer camp
 
 ## Status
 
-Private development. Phase 3 adds save sync after vanilla multiplayer save writes.
+Private development. Phase 4 adds active-save recovery choices before replacing the vanilla multiplayer save.
 
-The picker can start a new vanilla run or activate an existing campaign payload from the save bank before resuming the vanilla host flow. After vanilla writes `current_run_mp.save`, the mod syncs existing selected campaigns back to the bank and finalizes newly started runs as separate bank campaigns. Roster labels for newly finalized runs are still placeholder metadata until live lobby roster extraction is added.
+The picker can start a new vanilla run or activate an existing campaign payload from the save bank before resuming the vanilla host flow. After vanilla writes `current_run_mp.save`, the mod syncs existing selected campaigns back to the bank and finalizes newly started runs as separate bank campaigns.
+
+If an active multiplayer save is unmanaged or has unsynced changes, the picker now offers conservative recovery actions before continuing. It can duplicate an unmanaged active save into the bank or sync active changes back to the owning campaign. Roster labels for newly finalized or duplicated runs are still placeholder metadata until live lobby roster extraction is added.
 
 ## Design
 
@@ -42,3 +44,5 @@ DOTNET_ROLL_FORWARD=Major dotnet run --project tests/MultiplayerSaveSlots.Tests.
 10. Progress far enough for STS2 to write the multiplayer run save.
 11. Confirm `MultiplayerSaveSlots/index.json` gains a new campaign id.
 12. Re-open `Host -> Standard` and confirm the new campaign appears in the picker.
+13. With an unmanaged `current_run_mp.save` present, choose a host action and confirm the recovery modal offers `Duplicate Active Save`.
+14. With a managed active save changed after activation, choose a different campaign and confirm the recovery modal offers `Sync Active Save`.

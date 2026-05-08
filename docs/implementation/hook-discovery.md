@@ -214,3 +214,7 @@ Existing campaign selections activate the campaign payload into `current_run_mp.
 Phase 3 uses a postfix on `SaveManager.SaveRun(AbstractRoom?, bool)` and wraps the returned `Task`. This keeps vanilla error handling intact and runs Multiplayer Save Slots sync only after STS2 has completed its save batch.
 
 The lower-level `RunSaveManager.SaveRun(AbstractRoom?)` is the method that writes `current_run_mp.save` and raises `Saved`, but patching the facade gives the mod one point after progress save batching and current-save task serialization.
+
+## Phase 4 Safety Recovery
+
+Phase 4 does not add new STS2 hooks. It reuses the host picker flow and save-sync services to offer conservative recovery actions before the mod replaces `current_run_mp.save`.
