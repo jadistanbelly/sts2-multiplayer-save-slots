@@ -26,12 +26,16 @@ public sealed class ActiveSaveSwitcher
         if (!string.IsNullOrEmpty(activeSaveDirectory))
             Directory.CreateDirectory(activeSaveDirectory);
 
+        string? checksumBeforeActivation = null;
         if (File.Exists(_activeSavePath))
+        {
+            checksumBeforeActivation = FileChecksum.Sha256(_activeSavePath);
             BackupManager.CreateBackup(_activeSavePath, _bank.GetBackupDirectory(campaignId), "before-activate-active", nowUtc);
+        }
 
         File.Copy(payloadPath, _activeSavePath, overwrite: true);
         var checksum = FileChecksum.Sha256(_activeSavePath);
-        JsonFile.Write(_statePath, new ActiveSaveState(campaignId, checksum, nowUtc));
+        JsonFile.Write(_statePath, new ActiveSaveState(campaignId, checksumBeforeActivation, checksum, nowUtc));
 
         _bank.UpdateMetadata(metadata with
         {

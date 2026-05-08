@@ -10,6 +10,7 @@ public static class ActiveSaveSwitcherTests
     {
         tests.Add(new TestCase("switcher activates campaign into active save slot", ActivatesCampaign));
         tests.Add(new TestCase("switcher activation backs up existing active save", ActivationBacksUpExistingActiveSave));
+        tests.Add(new TestCase("switcher records previous active checksum and backs up active file", BacksUpPreviousActive));
         tests.Add(new TestCase("switcher activation updates metadata", ActivationUpdatesMetadata));
         tests.Add(new TestCase("switcher activation rejects missing bank payload", ActivationRejectsMissingBankPayload));
         tests.Add(new TestCase("switcher activation supports bare active and state paths", ActivationSupportsBareActiveAndStatePaths));
@@ -58,6 +59,30 @@ public static class ActiveSaveSwitcherTests
 
         var backup = SingleFile(bank.GetBackupDirectory(metadata.CampaignId));
         AssertEx.Equal("existing-active", File.ReadAllText(backup));
+    }
+
+    private static void BacksUpPreviousActive()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(source, "campaign");
+        File.WriteAllText(active, "previous-active");
+        var checksumBeforeActivation = FileChecksum.Sha256(active);
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+
+        switcher.Activate(metadata.CampaignId, new DateTimeOffset(2026, 5, 8, 13, 0, 0, TimeSpan.Zero));
+
+        var backups = Directory.GetFiles(bank.GetBackupDirectory(metadata.CampaignId));
+        AssertEx.Equal(1, backups.Length);
+        AssertEx.Equal("previous-active", File.ReadAllText(backups[0]));
+
+        using var stateJson = JsonDocument.Parse(File.ReadAllText(state));
+        AssertEx.Equal(checksumBeforeActivation, stateJson.RootElement.GetProperty("activeChecksumBeforeActivation").GetString());
     }
 
     private static void ActivationUpdatesMetadata()
