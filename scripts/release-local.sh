@@ -25,6 +25,14 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+verify_main_synced() {
+  git fetch origin main:refs/remotes/origin/main --tags
+
+  local_main="$(git rev-parse main)"
+  remote_main="$(git rev-parse origin/main)"
+  [[ "$local_main" == "$remote_main" ]] || die "local main is not synced with origin/main"
+}
+
 package_only=false
 
 if [[ $# -eq 2 && "$1" == "--package-only" ]]; then
@@ -93,11 +101,7 @@ if [[ "$package_only" == false ]]; then
     die "full release requires a clean worktree"
   fi
 
-  git fetch origin main:refs/remotes/origin/main --tags
-
-  local_main="$(git rev-parse main)"
-  remote_main="$(git rev-parse origin/main)"
-  [[ "$local_main" == "$remote_main" ]] || die "local main is not synced with origin/main"
+  verify_main_synced
 
   if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
     die "local tag already exists: $tag"
@@ -176,6 +180,8 @@ fi
 if [[ -n "$(git status --porcelain)" ]]; then
   die "full release requires a clean worktree before tagging"
 fi
+
+verify_main_synced
 
 info "creating annotated tag $tag"
 git tag -a "$tag" -m "Release $tag"

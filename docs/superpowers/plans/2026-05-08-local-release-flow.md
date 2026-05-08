@@ -91,6 +91,14 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+verify_main_synced() {
+  git fetch origin main:refs/remotes/origin/main --tags
+
+  local_main="$(git rev-parse main)"
+  remote_main="$(git rev-parse origin/main)"
+  [[ "$local_main" == "$remote_main" ]] || die "local main is not synced with origin/main"
+}
+
 package_only=false
 
 if [[ $# -eq 2 && "$1" == "--package-only" ]]; then
@@ -159,11 +167,7 @@ if [[ "$package_only" == false ]]; then
     die "full release requires a clean worktree"
   fi
 
-  git fetch origin main --tags
-
-  local_main="$(git rev-parse main)"
-  remote_main="$(git rev-parse origin/main)"
-  [[ "$local_main" == "$remote_main" ]] || die "local main is not synced with origin/main"
+  verify_main_synced
 
   if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
     die "local tag already exists: $tag"
@@ -182,7 +186,7 @@ info "building Release configuration"
 DOTNET_ROLL_FORWARD=Major dotnet build "$solution_path" -c Release
 
 info "running tests"
-DOTNET_ROLL_FORWARD=Major dotnet run --project "$test_project"
+DOTNET_ROLL_FORWARD=Major dotnet run --project "$test_project" -c Release
 
 [[ -f "$dll_path" ]] || die "expected built DLL at $dll_path"
 
@@ -238,6 +242,12 @@ if [[ "$package_only" == true ]]; then
   info "package-only release artifact ready: $zip_path"
   exit 0
 fi
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  die "full release requires a clean worktree before tagging"
+fi
+
+verify_main_synced
 
 info "creating annotated tag $tag"
 git tag -a "$tag" -m "Release $tag"
