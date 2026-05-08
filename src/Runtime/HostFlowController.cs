@@ -35,8 +35,12 @@ public sealed class HostFlowController
 
     public OperationResult SelectStartNewRun(MultiplayerGameMode gameMode)
     {
+        var continuation = _continuation.StartNewRun(gameMode);
+        if (!continuation.Success)
+            return continuation;
+
         _session.SelectNewRun(gameMode);
-        return _continuation.StartNewRun(gameMode);
+        return continuation;
     }
 
     public OperationResult SelectExistingCampaign(string campaignId, MultiplayerGameMode gameMode)
@@ -45,7 +49,11 @@ public sealed class HostFlowController
         if (!activation.Success)
             return activation;
 
+        var continuation = _continuation.LoadExistingRun();
+        if (!continuation.Success)
+            return continuation;
+
         _session.SelectExistingCampaign(campaignId, gameMode);
-        return _continuation.LoadExistingRun();
+        return continuation;
     }
 }

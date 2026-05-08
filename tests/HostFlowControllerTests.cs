@@ -14,8 +14,11 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
         yield return new TestCase("controller starts new run through continuation", ControllerStartsNewRunThroughContinuation);
+        yield return new TestCase("controller does not select session when start new continuation fails", ControllerStopsSessionSelectionWhenStartNewFails);
         yield return new TestCase("controller activates existing campaign before load continuation", ControllerActivatesExistingCampaign);
         yield return new TestCase("controller does not continue when activation fails", ControllerStopsWhenActivationFails);
+        yield return new TestCase("controller does not select session when existing load continuation fails", ControllerStopsSessionSelectionWhenLoadFails);
+        yield return new TestCase("active save activator maps exceptions to failed result", ActiveSaveActivatorMapsExceptions);
     }
 
     private static void RuntimePathsPlaceBankBesideActiveSave()
@@ -133,6 +136,21 @@ public static class HostFlowControllerTests
         AssertEx.Equal(1, continuation.LoadExistingCount);
     }
 
+    private static void ControllerStopsSessionSelectionWhenStartNewFails()
+    {
+        var continuation = new FakeHostFlowContinuation { StartNewRunFailure = "start failed" };
+        var session = new HostFlowSession();
+        var controller = CreateController(new FakeHostFlowSaveBank(), continuation: continuation, session: session);
+
+        var result = controller.SelectStartNewRun(MultiplayerGameMode.Daily);
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("start failed", result.ErrorMessage);
+        AssertEx.Equal(null, session.SelectedCampaignId);
+        AssertEx.Equal(null, session.SelectedGameMode);
+        AssertEx.False(session.IsPendingNewRun);
+    }
+
     private static void ControllerStopsWhenActivationFails()
     {
         var activator = new FakeActiveSaveActivator { Failure = "Active save has unsynced changes" };
@@ -145,6 +163,31 @@ public static class HostFlowControllerTests
         AssertEx.Equal("Active save has unsynced changes", result.ErrorMessage);
         AssertEx.Equal(0, continuation.StartNewRunCount);
         AssertEx.Equal(0, continuation.LoadExistingCount);
+    }
+
+    private static void ActiveSaveActivatorMapsExceptions()
+    {
+        var activator = new DelegateActiveSaveActivator((_, _) => throw new InvalidOperationException("bad active save"));
+
+        var result = activator.Activate("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", DateTimeOffset.Parse("2026-05-08T12:00:00Z"));
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("bad active save", result.ErrorMessage);
+    }
+
+    private static void ControllerStopsSessionSelectionWhenLoadFails()
+    {
+        var continuation = new FakeHostFlowContinuation { LoadExistingFailure = "load failed" };
+        var session = new HostFlowSession();
+        var controller = CreateController(new FakeHostFlowSaveBank(), continuation: continuation, session: session);
+
+        var result = controller.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("load failed", result.ErrorMessage);
+        AssertEx.Equal(null, session.SelectedCampaignId);
+        AssertEx.Equal(null, session.SelectedGameMode);
+        AssertEx.False(session.IsPendingNewRun);
     }
 
     private static HostFlowController CreateController(
@@ -193,16 +236,24 @@ public static class HostFlowControllerTests
     {
         public int StartNewRunCount { get; private set; }
         public int LoadExistingCount { get; private set; }
+        public string? StartNewRunFailure { get; init; }
+        public string? LoadExistingFailure { get; init; }
 
         public OperationResult StartNewRun(MultiplayerGameMode gameMode)
         {
             StartNewRunCount++;
+            if (StartNewRunFailure is not null)
+                return OperationResult.Fail(StartNewRunFailure);
+
             return OperationResult.Ok();
         }
 
         public OperationResult LoadExistingRun()
         {
             LoadExistingCount++;
+            if (LoadExistingFailure is not null)
+                return OperationResult.Fail(LoadExistingFailure);
+
             return OperationResult.Ok();
         }
     }
