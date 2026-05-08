@@ -27,6 +27,9 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("sync-back updates active state checksum after successful sync", SyncBackUpdatesActiveStateChecksumAfterSuccessfulSync));
         tests.Add(new TestCase("activation rejects unsynced active state before mutation", ActivationRejectsUnsyncedActiveStateBeforeMutation));
         tests.Add(new TestCase("activation allows switching when active state is clean", ActivationAllowsSwitchingWhenActiveStateIsClean));
+        tests.Add(new TestCase("switcher restores previous active save after activation", RestoresPreviousActiveAfterActivation));
+        tests.Add(new TestCase("switcher restore rejects changed activated save", RestoreRejectsChangedActivatedSave));
+        tests.Add(new TestCase("switcher restore fails before mutating when previous state backup is missing", RestoreFailsBeforeMutatingWhenPreviousStateBackupMissing));
         tests.Add(new TestCase("switcher sync-back fails before mutating payload when metadata is missing", SyncBackMissingMetadataFailsBeforeMutatingPayload));
         tests.Add(new TestCase("switcher sync-back fails before mutating payload when metadata is malformed", SyncBackMalformedMetadataFailsBeforeMutatingPayload));
     }
@@ -416,6 +419,70 @@ public static class ActiveSaveSwitcherTests
 
         var activeState = JsonFile.Read<ActiveSaveState>(state);
         AssertEx.Equal(metadataB.CampaignId, activeState.CampaignId);
+    }
+
+    private static void RestoresPreviousActiveAfterActivation()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(source, "campaign");
+        File.WriteAllText(active, "previous-active");
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+
+        switcher.Activate(metadata.CampaignId, new DateTimeOffset(2026, 5, 8, 12, 0, 0, TimeSpan.Zero));
+        switcher.RestorePreviousActive(new DateTimeOffset(2026, 5, 8, 12, 1, 0, TimeSpan.Zero));
+
+        AssertEx.Equal("previous-active", File.ReadAllText(active));
+        AssertEx.False(File.Exists(state));
+    }
+
+    private static void RestoreRejectsChangedActivatedSave()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(source, "campaign");
+        File.WriteAllText(active, "previous-active");
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+
+        switcher.Activate(metadata.CampaignId, DateTimeOffset.UtcNow);
+        File.WriteAllText(active, "changed-after-activation");
+
+        AssertEx.Throws<InvalidOperationException>(() => switcher.RestorePreviousActive(DateTimeOffset.UtcNow));
+        AssertEx.Equal("changed-after-activation", File.ReadAllText(active));
+    }
+
+    private static void RestoreFailsBeforeMutatingWhenPreviousStateBackupMissing()
+    {
+        using var temp = new TempDirectory();
+        var sourceA = Path.Combine(temp.Path, "source-a.save");
+        var sourceB = Path.Combine(temp.Path, "source-b.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(sourceA, "campaign-a");
+        File.WriteAllText(sourceB, "campaign-b");
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadataA = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], sourceA, DateTimeOffset.UtcNow));
+        var metadataB = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], sourceB, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+        switcher.Activate(metadataA.CampaignId, new DateTimeOffset(2026, 5, 8, 12, 0, 0, TimeSpan.Zero));
+        switcher.Activate(metadataB.CampaignId, new DateTimeOffset(2026, 5, 8, 12, 1, 0, TimeSpan.Zero));
+        var currentState = JsonFile.Read<ActiveSaveState>(state);
+        File.Delete(currentState.PreviousStateBackupPath!);
+
+        AssertEx.Throws<FileNotFoundException>(() => switcher.RestorePreviousActive(DateTimeOffset.UtcNow));
+        AssertEx.Equal("campaign-b", File.ReadAllText(active));
+        AssertEx.Equal(metadataB.CampaignId, JsonFile.Read<ActiveSaveState>(state).CampaignId);
     }
 
     private static void SyncBackMissingMetadataFailsBeforeMutatingPayload()

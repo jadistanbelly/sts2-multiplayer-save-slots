@@ -35,15 +35,26 @@ public sealed class ActiveSaveSwitcher
             Directory.CreateDirectory(activeSaveDirectory);
 
         string? checksumBeforeActivation = null;
+        string? previousActiveBackupPath = null;
         if (File.Exists(_activeSavePath))
         {
             checksumBeforeActivation = FileChecksum.Sha256(_activeSavePath);
-            BackupManager.CreateBackup(_activeSavePath, _bank.GetBackupDirectory(campaignId), "before-activate-active", nowUtc);
+            previousActiveBackupPath = BackupManager.CreateBackup(_activeSavePath, _bank.GetBackupDirectory(campaignId), "before-activate-active", nowUtc);
         }
+
+        string? previousStateBackupPath = null;
+        if (File.Exists(_statePath))
+            previousStateBackupPath = BackupManager.CreateBackup(_statePath, _bank.GetBackupDirectory(campaignId), "before-activate-state", nowUtc);
 
         File.Copy(payloadPath, _activeSavePath, overwrite: true);
         var checksum = FileChecksum.Sha256(_activeSavePath);
-        JsonFile.Write(_statePath, new ActiveSaveState(campaignId, checksumBeforeActivation, checksum, nowUtc));
+        JsonFile.Write(_statePath, new ActiveSaveState(
+            campaignId,
+            checksumBeforeActivation,
+            checksum,
+            nowUtc,
+            previousActiveBackupPath,
+            previousStateBackupPath));
 
         _bank.UpdateMetadata(metadata with
         {
@@ -51,6 +62,54 @@ public sealed class ActiveSaveSwitcher
             PayloadChecksum = FileChecksum.Sha256(payloadPath),
             LastPlayedAtUtc = nowUtc
         });
+    }
+
+    public void RestorePreviousActive(DateTimeOffset nowUtc)
+    {
+        if (!File.Exists(_statePath))
+            throw new InvalidOperationException("Cannot restore active save without active campaign state");
+
+        var state = JsonFile.Read<ActiveSaveState>(_statePath);
+        if (state.PreviousActiveBackupPath is not null && !File.Exists(state.PreviousActiveBackupPath))
+            throw new FileNotFoundException("Previous active save backup is missing", state.PreviousActiveBackupPath);
+
+        if (state.PreviousStateBackupPath is not null && !File.Exists(state.PreviousStateBackupPath))
+            throw new FileNotFoundException("Previous active state backup is missing", state.PreviousStateBackupPath);
+
+        if (File.Exists(_activeSavePath))
+        {
+            var currentActiveChecksum = FileChecksum.Sha256(_activeSavePath);
+            if (currentActiveChecksum != state.ActiveChecksumAfterActivation)
+                throw new InvalidOperationException("Active save has changed since activation and cannot be restored automatically");
+
+            BackupManager.CreateBackup(_activeSavePath, _bank.GetBackupDirectory(state.CampaignId), "before-restore-active", nowUtc);
+        }
+
+        if (state.PreviousActiveBackupPath is null)
+        {
+            if (File.Exists(_activeSavePath))
+                File.Delete(_activeSavePath);
+        }
+        else
+        {
+            var activeSaveDirectory = Path.GetDirectoryName(_activeSavePath);
+            if (!string.IsNullOrEmpty(activeSaveDirectory))
+                Directory.CreateDirectory(activeSaveDirectory);
+            File.Copy(state.PreviousActiveBackupPath, _activeSavePath, overwrite: true);
+        }
+
+        if (state.PreviousStateBackupPath is null)
+        {
+            if (File.Exists(_statePath))
+                File.Delete(_statePath);
+        }
+        else
+        {
+            var stateDirectory = Path.GetDirectoryName(_statePath);
+            if (!string.IsNullOrEmpty(stateDirectory))
+                Directory.CreateDirectory(stateDirectory);
+            File.Copy(state.PreviousStateBackupPath, _statePath, overwrite: true);
+        }
     }
 
     public void SyncBack(DateTimeOffset nowUtc)

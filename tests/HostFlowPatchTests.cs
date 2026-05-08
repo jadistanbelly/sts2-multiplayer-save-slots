@@ -10,7 +10,7 @@ public static class HostFlowPatchTests
     {
         yield return new TestCase("game mode map handles standard daily and custom", GameModeMapHandlesAllModes);
         yield return new TestCase("host submenu prefix allows vanilla while resuming", HostSubmenuPrefixAllowsVanillaWhileResuming);
-        yield return new TestCase("host submenu prefix falls back to vanilla when picker setup fails", HostSubmenuPrefixFallsBackToVanilla);
+        yield return new TestCase("host submenu prefix blocks vanilla when picker setup fails", HostSubmenuPrefixBlocksVanillaWhenPickerSetupFails);
     }
 
     private static void GameModeMapHandlesAllModes()
@@ -67,7 +67,7 @@ public static class HostFlowPatchTests
         }
     }
 
-    private static void HostSubmenuPrefixFallsBackToVanilla()
+    private static void HostSubmenuPrefixBlocksVanillaWhenPickerSetupFails()
     {
         var (_, prefix, _) = GetHostSubmenuPatchMembers();
         var gameModeType = prefix.GetParameters()[1].ParameterType;
@@ -84,7 +84,7 @@ public static class HostFlowPatchTests
             (Action<HostFlowController, MultiplayerGameMode>)((_, _) => { })
         });
 
-        AssertEx.Equal(true, result);
+        AssertEx.Equal(false, result);
     }
 
     private static (FieldInfo ResumingField, MethodInfo Prefix, Type PatchType) GetHostSubmenuPatchMembers()

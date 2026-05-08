@@ -39,8 +39,8 @@ public static class MultiplayerHostSubmenuPatch
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[MultiplayerSaveSlots] Failed to open save picker; falling back to vanilla host flow: {ex.Message}");
-            return true;
+            Console.Error.WriteLine($"[MultiplayerSaveSlots] Failed to open save picker; blocking vanilla host flow: {ex.Message}");
+            return false;
         }
     }
 

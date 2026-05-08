@@ -10,6 +10,7 @@ using MegaCrit.Sts2.Core.Saves.Managers;
 using MultiplayerSaveSlots.Core;
 using MultiplayerSaveSlots.Storage;
 using MultiplayerSaveSlots.UI;
+using System.Text.Json;
 
 namespace MultiplayerSaveSlots.Runtime;
 
@@ -42,7 +43,8 @@ public static class Sts2HostFlowRuntime
         var switcher = new ActiveSaveSwitcher(bank, paths.ActiveSavePath, paths.ActiveStatePath);
         return new HostFlowController(
             new Sts2SaveBankAdapter(bank),
-            new DelegateActiveSaveActivator(switcher.Activate),
+            new ActiveSaveReplacementGuard(paths.ActiveSavePath, paths.ActiveStatePath),
+            new DelegateActiveSaveActivator(switcher.Activate, switcher.RestorePreviousActive),
             new Sts2HostFlowContinuation(hostSubmenu),
             Session,
             new SystemClock());
@@ -61,6 +63,40 @@ public static class Sts2HostFlowRuntime
 
     public static void ShowPicker(HostFlowController controller, MultiplayerGameMode gameMode) =>
         MultiplayerSavePickerModal.Show(controller, gameMode);
+}
+
+public sealed class ActiveSaveReplacementGuard : IActiveSavePreflight
+{
+    private readonly string _activeSavePath;
+    private readonly string _statePath;
+
+    public ActiveSaveReplacementGuard(string activeSavePath, string statePath)
+    {
+        _activeSavePath = activeSavePath;
+        _statePath = statePath;
+    }
+
+    public OperationResult EnsureActiveSaveCanBeReplaced()
+    {
+        if (!File.Exists(_activeSavePath))
+            return OperationResult.Ok();
+
+        if (!File.Exists(_statePath))
+            return OperationResult.Fail("Current multiplayer save is not managed by Multiplayer Save Slots yet.");
+
+        try
+        {
+            var state = JsonFile.Read<ActiveSaveState>(_statePath);
+            var currentActiveChecksum = FileChecksum.Sha256(_activeSavePath);
+            return currentActiveChecksum == state.ActiveChecksumAfterActivation
+                ? OperationResult.Ok()
+                : OperationResult.Fail("Active save has unsynced changes");
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
+        {
+            return OperationResult.Fail($"Active save state cannot be verified: {ex.Message}");
+        }
+    }
 }
 
 public sealed class MultiplayerSaveGameModeMap
@@ -85,6 +121,7 @@ public sealed class MultiplayerSaveGameModeMap
 public sealed class Sts2HostFlowContinuation : IHostFlowContinuation
 {
     private readonly NMultiplayerHostSubmenu _hostSubmenu;
+    private NMultiplayerSubmenu? _preparedMultiplayerSubmenu;
 
     public Sts2HostFlowContinuation(NMultiplayerHostSubmenu hostSubmenu)
     {
@@ -104,12 +141,24 @@ public sealed class Sts2HostFlowContinuation : IHostFlowContinuation
         }
     }
 
+    public OperationResult PrepareLoadExistingRun()
+    {
+        try
+        {
+            _preparedMultiplayerSubmenu = GetMultiplayerSubmenu();
+            return OperationResult.Ok();
+        }
+        catch (Exception ex)
+        {
+            return OperationResult.Fail(ex.Message);
+        }
+    }
+
     public OperationResult LoadExistingRun()
     {
         try
         {
-            var stack = Traverse.Create(_hostSubmenu).Field("_stack").GetValue<NSubmenuStack>();
-            var multiplayerSubmenu = stack.GetSubmenuType<NMultiplayerSubmenu>();
+            var multiplayerSubmenu = _preparedMultiplayerSubmenu ?? GetMultiplayerSubmenu();
             var platformType = GetVanillaMultiplayerPlatform();
             var readSave = SaveManager.Instance.LoadAndCanonicalizeMultiplayerRunSave(PlatformUtil.GetLocalPlayerId(platformType));
             if (!readSave.Success || readSave.SaveData == null)
@@ -122,6 +171,12 @@ public sealed class Sts2HostFlowContinuation : IHostFlowContinuation
         {
             return OperationResult.Fail(ex.Message);
         }
+    }
+
+    private NMultiplayerSubmenu GetMultiplayerSubmenu()
+    {
+        var stack = Traverse.Create(_hostSubmenu).Field("_stack").GetValue<NSubmenuStack>();
+        return stack.GetSubmenuType<NMultiplayerSubmenu>();
     }
 
     private static PlatformType GetVanillaMultiplayerPlatform() =>

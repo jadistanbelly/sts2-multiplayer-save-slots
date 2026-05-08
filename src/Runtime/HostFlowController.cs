@@ -6,6 +6,7 @@ namespace MultiplayerSaveSlots.Runtime;
 public sealed class HostFlowController
 {
     private readonly IHostFlowSaveBank _bank;
+    private readonly IActiveSavePreflight _preflight;
     private readonly IActiveSaveActivator _activator;
     private readonly IHostFlowContinuation _continuation;
     private readonly HostFlowSession _session;
@@ -13,12 +14,14 @@ public sealed class HostFlowController
 
     public HostFlowController(
         IHostFlowSaveBank bank,
+        IActiveSavePreflight preflight,
         IActiveSaveActivator activator,
         IHostFlowContinuation continuation,
         HostFlowSession session,
         IClock clock)
     {
         _bank = bank;
+        _preflight = preflight;
         _activator = activator;
         _continuation = continuation;
         _session = session;
@@ -35,6 +38,10 @@ public sealed class HostFlowController
 
     public OperationResult SelectStartNewRun(MultiplayerGameMode gameMode)
     {
+        var preflight = _preflight.EnsureActiveSaveCanBeReplaced();
+        if (!preflight.Success)
+            return preflight;
+
         var continuation = _continuation.StartNewRun(gameMode);
         if (!continuation.Success)
             return continuation;
@@ -45,13 +52,27 @@ public sealed class HostFlowController
 
     public OperationResult SelectExistingCampaign(string campaignId, MultiplayerGameMode gameMode)
     {
+        var activePreflight = _preflight.EnsureActiveSaveCanBeReplaced();
+        if (!activePreflight.Success)
+            return activePreflight;
+
+        var loadPreflight = _continuation.PrepareLoadExistingRun();
+        if (!loadPreflight.Success)
+            return loadPreflight;
+
         var activation = _activator.Activate(campaignId, _clock.UtcNow);
         if (!activation.Success)
             return activation;
 
         var continuation = _continuation.LoadExistingRun();
         if (!continuation.Success)
+        {
+            var restore = _activator.RestorePreviousActive(_clock.UtcNow);
+            if (!restore.Success)
+                return OperationResult.Fail($"{continuation.ErrorMessage}; rollback failed: {restore.ErrorMessage}");
+
             return continuation;
+        }
 
         _session.SelectExistingCampaign(campaignId, gameMode);
         return continuation;

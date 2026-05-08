@@ -4,4 +4,6 @@ public sealed record ActiveSaveState(
     string CampaignId,
     string? ActiveChecksumBeforeActivation,
     string ActiveChecksumAfterActivation,
-    DateTimeOffset ActivatedAtUtc);
+    DateTimeOffset ActivatedAtUtc,
+    string? PreviousActiveBackupPath = null,
+    string? PreviousStateBackupPath = null);

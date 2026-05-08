@@ -14,9 +14,14 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
         yield return new TestCase("controller starts new run through continuation", ControllerStartsNewRunThroughContinuation);
+        yield return new TestCase("controller does not start new run when active preflight fails", ControllerStopsStartNewWhenPreflightFails);
         yield return new TestCase("controller does not select session when start new continuation fails", ControllerStopsSessionSelectionWhenStartNewFails);
         yield return new TestCase("controller activates existing campaign before load continuation", ControllerActivatesExistingCampaign);
+        yield return new TestCase("controller does not activate existing campaign when active preflight fails", ControllerStopsExistingCampaignWhenActivePreflightFails);
+        yield return new TestCase("controller does not activate existing campaign when load preflight fails", ControllerStopsExistingCampaignWhenLoadPreflightFails);
         yield return new TestCase("controller does not continue when activation fails", ControllerStopsWhenActivationFails);
+        yield return new TestCase("controller restores previous active save when existing load continuation fails", ControllerRestoresPreviousActiveWhenLoadFails);
+        yield return new TestCase("controller reports rollback failure after existing load continuation fails", ControllerReportsRollbackFailureWhenLoadFails);
         yield return new TestCase("controller does not select session when existing load continuation fails", ControllerStopsSessionSelectionWhenLoadFails);
         yield return new TestCase("active save activator maps exceptions to failed result", ActiveSaveActivatorMapsExceptions);
     }
@@ -136,6 +141,25 @@ public static class HostFlowControllerTests
         AssertEx.Equal(1, continuation.LoadExistingCount);
     }
 
+    private static void ControllerStopsStartNewWhenPreflightFails()
+    {
+        var preflight = new FakeActiveSavePreflight { Failure = "Active save has unsynced changes" };
+        var continuation = new FakeHostFlowContinuation();
+        var session = new HostFlowSession();
+        var controller = CreateController(
+            new FakeHostFlowSaveBank(),
+            continuation: continuation,
+            session: session,
+            preflight: preflight);
+
+        var result = controller.SelectStartNewRun(MultiplayerGameMode.Standard);
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("Active save has unsynced changes", result.ErrorMessage);
+        AssertEx.Equal(0, continuation.StartNewRunCount);
+        AssertEx.Equal(null, session.SelectedGameMode);
+    }
+
     private static void ControllerStopsSessionSelectionWhenStartNewFails()
     {
         var continuation = new FakeHostFlowContinuation { StartNewRunFailure = "start failed" };
@@ -165,6 +189,35 @@ public static class HostFlowControllerTests
         AssertEx.Equal(0, continuation.LoadExistingCount);
     }
 
+    private static void ControllerStopsExistingCampaignWhenLoadPreflightFails()
+    {
+        var activator = new FakeActiveSaveActivator();
+        var continuation = new FakeHostFlowContinuation { PrepareLoadExistingFailure = "menu stack unavailable" };
+        var controller = CreateController(new FakeHostFlowSaveBank(), activator, continuation);
+
+        var result = controller.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("menu stack unavailable", result.ErrorMessage);
+        AssertEx.Equal(null, activator.ActivatedCampaignId);
+        AssertEx.Equal(0, continuation.LoadExistingCount);
+    }
+
+    private static void ControllerStopsExistingCampaignWhenActivePreflightFails()
+    {
+        var activator = new FakeActiveSaveActivator();
+        var continuation = new FakeHostFlowContinuation();
+        var preflight = new FakeActiveSavePreflight { Failure = "Current multiplayer save is not managed" };
+        var controller = CreateController(new FakeHostFlowSaveBank(), activator, continuation, preflight: preflight);
+
+        var result = controller.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("Current multiplayer save is not managed", result.ErrorMessage);
+        AssertEx.Equal(null, activator.ActivatedCampaignId);
+        AssertEx.Equal(0, continuation.LoadExistingCount);
+    }
+
     private static void ActiveSaveActivatorMapsExceptions()
     {
         var activator = new DelegateActiveSaveActivator((_, _) => throw new InvalidOperationException("bad active save"));
@@ -173,6 +226,33 @@ public static class HostFlowControllerTests
 
         AssertEx.False(result.Success);
         AssertEx.Equal("bad active save", result.ErrorMessage);
+    }
+
+    private static void ControllerRestoresPreviousActiveWhenLoadFails()
+    {
+        var activator = new FakeActiveSaveActivator();
+        var continuation = new FakeHostFlowContinuation { LoadExistingFailure = "load failed" };
+        var controller = CreateController(new FakeHostFlowSaveBank(), activator, continuation);
+
+        var result = controller.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("load failed", result.ErrorMessage);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", activator.ActivatedCampaignId);
+        AssertEx.Equal(1, activator.RestoreCount);
+    }
+
+    private static void ControllerReportsRollbackFailureWhenLoadFails()
+    {
+        var activator = new FakeActiveSaveActivator { RestoreFailure = "restore failed" };
+        var continuation = new FakeHostFlowContinuation { LoadExistingFailure = "load failed" };
+        var controller = CreateController(new FakeHostFlowSaveBank(), activator, continuation);
+
+        var result = controller.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("load failed; rollback failed: restore failed", result.ErrorMessage);
+        AssertEx.Equal(1, activator.RestoreCount);
     }
 
     private static void ControllerStopsSessionSelectionWhenLoadFails()
@@ -194,10 +274,12 @@ public static class HostFlowControllerTests
         FakeHostFlowSaveBank? bank = null,
         FakeActiveSaveActivator? activator = null,
         FakeHostFlowContinuation? continuation = null,
-        HostFlowSession? session = null)
+        HostFlowSession? session = null,
+        FakeActiveSavePreflight? preflight = null)
     {
         return new HostFlowController(
             bank ?? new FakeHostFlowSaveBank(),
+            preflight ?? new FakeActiveSavePreflight(),
             activator ?? new FakeActiveSaveActivator(),
             continuation ?? new FakeHostFlowContinuation(),
             session ?? new HostFlowSession(),
@@ -221,6 +303,8 @@ public static class HostFlowControllerTests
     {
         public string? ActivatedCampaignId { get; private set; }
         public string? Failure { get; init; }
+        public string? RestoreFailure { get; init; }
+        public int RestoreCount { get; private set; }
 
         public OperationResult Activate(string campaignId, DateTimeOffset nowUtc)
         {
@@ -230,13 +314,24 @@ public static class HostFlowControllerTests
             ActivatedCampaignId = campaignId;
             return OperationResult.Ok();
         }
+
+        public OperationResult RestorePreviousActive(DateTimeOffset nowUtc)
+        {
+            RestoreCount++;
+            if (RestoreFailure is not null)
+                return OperationResult.Fail(RestoreFailure);
+
+            return OperationResult.Ok();
+        }
     }
 
     private sealed class FakeHostFlowContinuation : IHostFlowContinuation
     {
         public int StartNewRunCount { get; private set; }
+        public int PrepareLoadExistingCount { get; private set; }
         public int LoadExistingCount { get; private set; }
         public string? StartNewRunFailure { get; init; }
+        public string? PrepareLoadExistingFailure { get; init; }
         public string? LoadExistingFailure { get; init; }
 
         public OperationResult StartNewRun(MultiplayerGameMode gameMode)
@@ -244,6 +339,15 @@ public static class HostFlowControllerTests
             StartNewRunCount++;
             if (StartNewRunFailure is not null)
                 return OperationResult.Fail(StartNewRunFailure);
+
+            return OperationResult.Ok();
+        }
+
+        public OperationResult PrepareLoadExistingRun()
+        {
+            PrepareLoadExistingCount++;
+            if (PrepareLoadExistingFailure is not null)
+                return OperationResult.Fail(PrepareLoadExistingFailure);
 
             return OperationResult.Ok();
         }
@@ -256,5 +360,13 @@ public static class HostFlowControllerTests
 
             return OperationResult.Ok();
         }
+    }
+
+    private sealed class FakeActiveSavePreflight : IActiveSavePreflight
+    {
+        public string? Failure { get; init; }
+
+        public OperationResult EnsureActiveSaveCanBeReplaced() =>
+            Failure is null ? OperationResult.Ok() : OperationResult.Fail(Failure);
     }
 }
