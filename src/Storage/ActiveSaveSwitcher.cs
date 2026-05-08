@@ -22,6 +22,14 @@ public sealed class ActiveSaveSwitcher
         var metadata = _bank.GetCampaign(campaignId);
         _bank.EnsureCampaignIndexed(campaignId);
 
+        if (File.Exists(_statePath) && File.Exists(_activeSavePath))
+        {
+            var existingState = JsonFile.Read<ActiveSaveState>(_statePath);
+            var currentActiveChecksum = FileChecksum.Sha256(_activeSavePath);
+            if (currentActiveChecksum != existingState.ActiveChecksumAfterActivation)
+                throw new InvalidOperationException("Active save has unsynced changes");
+        }
+
         var activeSaveDirectory = Path.GetDirectoryName(_activeSavePath);
         if (!string.IsNullOrEmpty(activeSaveDirectory))
             Directory.CreateDirectory(activeSaveDirectory);
@@ -61,13 +69,26 @@ public sealed class ActiveSaveSwitcher
         var metadata = _bank.GetCampaign(state.CampaignId);
         _bank.EnsureCampaignIndexed(state.CampaignId);
 
+        var currentPayloadChecksum = FileChecksum.Sha256(payloadPath);
+        if (currentPayloadChecksum != state.ActiveChecksumAfterActivation)
+            throw new InvalidOperationException("Bank payload has changed since active save activation");
+
+        var currentActiveChecksum = FileChecksum.Sha256(_activeSavePath);
+        if (state.ActiveChecksumBeforeActivation is not null &&
+            currentActiveChecksum == state.ActiveChecksumBeforeActivation)
+        {
+            throw new InvalidOperationException("Active save matches the pre-activation checksum");
+        }
+
         BackupManager.CreateBackup(payloadPath, _bank.GetBackupDirectory(state.CampaignId), "before-sync-bank", nowUtc);
         File.Copy(_activeSavePath, payloadPath, overwrite: true);
+        var syncedPayloadChecksum = FileChecksum.Sha256(payloadPath);
+        JsonFile.Write(_statePath, state with { ActiveChecksumAfterActivation = syncedPayloadChecksum });
 
         _bank.UpdateMetadata(metadata with
         {
             ActiveChecksum = FileChecksum.Sha256(_activeSavePath),
-            PayloadChecksum = FileChecksum.Sha256(payloadPath),
+            PayloadChecksum = syncedPayloadChecksum,
             LastPlayedAtUtc = nowUtc
         });
     }
