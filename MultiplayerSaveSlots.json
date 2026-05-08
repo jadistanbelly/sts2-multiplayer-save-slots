@@ -1,0 +1,11 @@
+{
+  "id": "MultiplayerSaveSlots",
+  "name": "Multiplayer Save Slots",
+  "author": "jadistanbelly",
+  "description": "Adds multiple host-owned multiplayer save slots while preserving vanilla party validation.",
+  "version": "0.1.0",
+  "has_pck": false,
+  "has_dll": true,
+  "dependencies": [],
+  "affects_gameplay": false
+}
