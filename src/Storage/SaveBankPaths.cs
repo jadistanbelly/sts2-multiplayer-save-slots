@@ -11,8 +11,19 @@ public sealed class SaveBankPaths
     public string IndexPath => Path.Combine(RootDirectory, "index.json");
     public string SavesDirectory => Path.Combine(RootDirectory, "saves");
 
-    public string CampaignDirectory(string campaignId) => Path.Combine(SavesDirectory, campaignId);
+    public string CampaignDirectory(string campaignId)
+    {
+        ValidateCampaignId(campaignId);
+        return Path.Combine(SavesDirectory, campaignId);
+    }
+
     public string MetadataPath(string campaignId) => Path.Combine(CampaignDirectory(campaignId), "metadata.json");
     public string PayloadPath(string campaignId) => Path.Combine(CampaignDirectory(campaignId), "multiplayer_run.save");
     public string BackupDirectory(string campaignId) => Path.Combine(CampaignDirectory(campaignId), "backup");
+
+    private static void ValidateCampaignId(string campaignId)
+    {
+        if (!Guid.TryParseExact(campaignId, "N", out _))
+            throw new ArgumentException("Campaign id must be a 32-digit GUID string.", nameof(campaignId));
+    }
 }

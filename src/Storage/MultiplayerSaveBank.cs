@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MultiplayerSaveSlots.Core;
 
 namespace MultiplayerSaveSlots.Storage;
@@ -39,7 +40,7 @@ public sealed class MultiplayerSaveBank
 
         JsonFile.Write(_paths.MetadataPath(campaignId), metadata);
         var index = ReadIndex();
-        JsonFile.Write(_paths.IndexPath, new CampaignIndex(index.CampaignIds.Concat([campaignId]).ToList()));
+        WriteIndex(index.CampaignIds.Concat([campaignId]));
 
         return metadata;
     }
@@ -48,7 +49,9 @@ public sealed class MultiplayerSaveBank
     {
         EnsureCreated();
         return ReadIndex().CampaignIds
-            .Select(id => JsonFile.Read<CampaignMetadata>(_paths.MetadataPath(id)))
+            .Select(TryReadMetadata)
+            .Where(metadata => metadata is not null)
+            .Cast<CampaignMetadata>()
             .Where(metadata => metadata.GameMode == gameMode)
             .OrderByDescending(metadata => metadata.LastPlayedAtUtc)
             .ToList();
@@ -66,6 +69,9 @@ public sealed class MultiplayerSaveBank
     public void UpdateMetadata(CampaignMetadata metadata)
     {
         EnsureCreated();
+        if (!ReadIndex().CampaignIds.Contains(metadata.CampaignId))
+            throw new InvalidOperationException($"Campaign {metadata.CampaignId} is not indexed.");
+
         JsonFile.Write(_paths.MetadataPath(metadata.CampaignId), metadata);
     }
 
@@ -77,7 +83,31 @@ public sealed class MultiplayerSaveBank
             JsonFile.Write(_paths.IndexPath, CampaignIndex.Empty);
     }
 
-    private CampaignIndex ReadIndex() => File.Exists(_paths.IndexPath)
-        ? JsonFile.Read<CampaignIndex>(_paths.IndexPath)
-        : CampaignIndex.Empty;
+    private CampaignIndex ReadIndex()
+    {
+        if (!File.Exists(_paths.IndexPath))
+            return CampaignIndex.Empty;
+
+        var index = NormalizeIndex(JsonFile.Read<CampaignIndex>(_paths.IndexPath));
+        WriteIndex(index.CampaignIds);
+        return index;
+    }
+
+    private static CampaignIndex NormalizeIndex(CampaignIndex index) =>
+        new(index.CampaignIds.Distinct(StringComparer.Ordinal).ToList());
+
+    private void WriteIndex(IEnumerable<string> campaignIds) =>
+        JsonFile.Write(_paths.IndexPath, new CampaignIndex(campaignIds.Distinct(StringComparer.Ordinal).ToList()));
+
+    private CampaignMetadata? TryReadMetadata(string campaignId)
+    {
+        try
+        {
+            return JsonFile.Read<CampaignMetadata>(_paths.MetadataPath(campaignId));
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
 }
