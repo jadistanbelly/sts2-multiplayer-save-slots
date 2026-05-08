@@ -34,15 +34,16 @@ DOTNET_ROLL_FORWARD=Major dotnet run --project tests/MultiplayerSaveSlots.Tests.
 
 Releases are built locally because the project references STS2 assemblies from a local game install. A normal GitHub-hosted runner does not have `sts2.dll`, `GodotSharp.dll`, or `0Harmony.dll`.
 
-Required local tools:
+Package validation requires:
 
 - .NET SDK that can target `net9.0`
 - `python3`
 - `git`
-- authenticated GitHub CLI: `gh auth login`
 - Slay the Spire 2 installed in the path used by `MultiplayerSaveSlots.csproj`
 
-Before publishing a release, update `MultiplayerSaveSlots.json` so its `version` matches the release tag without the leading `v`.
+Publishing a full release additionally requires authenticated GitHub CLI via `gh auth login`.
+
+Before running either release command, update `MultiplayerSaveSlots.json` so its `version` matches the release tag without the leading `v`.
 
 Validate the package without creating a tag or GitHub Release:
 
