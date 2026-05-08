@@ -4,5 +4,6 @@ obj/
 .vs/
 *.user
 *.suo
+TestResults/
 
 .worktrees/
