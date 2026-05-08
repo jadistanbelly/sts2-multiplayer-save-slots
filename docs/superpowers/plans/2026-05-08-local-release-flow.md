@@ -473,4 +473,4 @@ git show --stat --oneline HEAD~2..HEAD
 git status --short --branch
 ```
 
-Expected: recent commits include only `.gitignore`, `scripts/release-local.sh`, and `README.md`, with no uncommitted tracked changes.
+Expected: recent commits include only `.gitignore`, `scripts/release-local.sh`, `README.md`, `docs/superpowers/specs/2026-05-08-local-release-flow-design.md`, and `docs/superpowers/plans/2026-05-08-local-release-flow.md`, with no uncommitted tracked changes.

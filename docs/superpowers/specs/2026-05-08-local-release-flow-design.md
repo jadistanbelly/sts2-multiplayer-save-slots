@@ -78,7 +78,7 @@ The local release script should:
 
 ```bash
 DOTNET_ROLL_FORWARD=Major dotnet build MultiplayerSaveSlots.sln -c Release
-DOTNET_ROLL_FORWARD=Major dotnet run --project tests/MultiplayerSaveSlots.Tests.csproj
+DOTNET_ROLL_FORWARD=Major dotnet run --project tests/MultiplayerSaveSlots.Tests.csproj -c Release
 ```
 
 10. Stage the release payload as:
@@ -132,7 +132,7 @@ Manual verification should include:
 
 ```bash
 DOTNET_ROLL_FORWARD=Major dotnet build MultiplayerSaveSlots.sln
-DOTNET_ROLL_FORWARD=Major dotnet run --project tests/MultiplayerSaveSlots.Tests.csproj
+DOTNET_ROLL_FORWARD=Major dotnet run --project tests/MultiplayerSaveSlots.Tests.csproj -c Release
 scripts/release-local.sh --package-only v0.1.0
 ```
 
