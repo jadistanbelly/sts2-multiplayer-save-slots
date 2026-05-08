@@ -10,6 +10,8 @@ public static class CampaignLabelerTests
         tests.Add(new TestCase("labeler uses two player names", TwoPlayers));
         tests.Add(new TestCase("labeler compacts large roster", ManyPlayers));
         tests.Add(new TestCase("labeler handles empty roster", EmptyRoster));
+        tests.Add(new TestCase("labeler trims player names", TrimmedPlayerName));
+        tests.Add(new TestCase("labeler uses unknown for whitespace player names", WhitespacePlayerName));
     }
 
     private static void OnePlayer()
@@ -47,5 +49,23 @@ public static class CampaignLabelerTests
     private static void EmptyRoster()
     {
         AssertEx.Equal("Unknown party", CampaignLabeler.Build([]));
+    }
+
+    private static void TrimmedPlayerName()
+    {
+        var label = CampaignLabeler.Build([
+            new PlayerIdentity("steam:1", "  buddy1  ")
+        ]);
+
+        AssertEx.Equal("buddy1", label);
+    }
+
+    private static void WhitespacePlayerName()
+    {
+        var label = CampaignLabeler.Build([
+            new PlayerIdentity("steam:1", "   ")
+        ]);
+
+        AssertEx.Equal("Unknown", label);
     }
 }

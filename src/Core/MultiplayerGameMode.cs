@@ -2,7 +2,7 @@ namespace MultiplayerSaveSlots.Core;
 
 public enum MultiplayerGameMode
 {
-    Standard,
-    Daily,
-    Custom
+    Standard = 0,
+    Daily = 1,
+    Custom = 2
 }
