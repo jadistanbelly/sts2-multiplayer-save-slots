@@ -323,18 +323,31 @@ write_report() {
 
 ## Manual Checklist
 
+### Solo Host-Picker Gate
+
 - [ ] Launch STS2 with mods enabled.
 - [ ] Open Multiplayer.
 - [ ] Confirm Host is visible even when a current multiplayer save exists.
 - [ ] Select Host -> Standard.
 - [ ] Confirm the Multiplayer Saves - Standard picker appears.
 - [ ] Choose Start New Run.
-- [ ] Confirm vanilla hosting continues.
+- [ ] Confirm hosting continues to the multiplayer lobby or character-select screen.
+- [ ] If RemoveMultiplayerPlayerLimit is installed, confirm the log records the RMP hosted lobby path/capacity.
+- [ ] Note: STS2 does not write a multiplayer run save from a solo host lobby; save creation requires at least one joined player and a run that actually begins.
+
+### Two-Player Save Lifecycle
+
+- [ ] Invite at least one other player and begin a Standard multiplayer run.
 - [ ] Progress far enough for STS2 to write the multiplayer run save.
 - [ ] Confirm MultiplayerSaveSlots/index.json gains a new campaign id.
 - [ ] Re-open Host -> Standard and confirm the new campaign appears in the picker.
-- [ ] Confirm the picker shows real roster labels, compacts 4+ player runs as First, Second +N, and omits progress when no safe act/floor value is available.
-- [ ] Open Details on a campaign row and confirm it shows progress, player count, timestamps, campaign id, and the full roster for a 4+ player campaign.
+- [ ] Confirm the picker shows real roster labels and omits progress when no safe act/floor value is available.
+- [ ] Open Details on a campaign row and confirm it shows progress, player count, timestamps, campaign id, and the full roster.
+
+### Expanded Roster And Recovery
+
+- [ ] With a 4+ player campaign, confirm roster labels compact as First, Second +N.
+- [ ] Open Details on a 4+ player campaign row and confirm it shows the full roster.
 - [ ] Select an older Unknown party campaign, then re-open the picker and confirm metadata repair updates the row if STS2 exposes roster/progress data.
 - [ ] In an existing campaign's loaded-run lobby, change the participant set if possible, press Embark, and confirm the compatibility warning appears once before the next identical Embark attempt proceeds to vanilla validation.
 - [ ] With an unmanaged current_run_mp.save fixture applied, choose a host action and confirm the recovery modal offers Duplicate Active Save.

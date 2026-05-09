@@ -105,21 +105,35 @@ scripts/smoke-setup-local.sh apply-fixture --name unmanaged-active --active-save
 
 Manual in-game checklist after setup:
 
+Solo host-picker gate:
+
 1. Launch STS2 with mods enabled.
 2. Open `Multiplayer`.
 3. Confirm `Host` is visible even when a current multiplayer save exists.
 4. Select `Host -> Standard`.
 5. Confirm the `Multiplayer Saves - Standard` picker appears.
 6. Choose `Start New Run`.
-7. Confirm vanilla hosting continues.
-8. Progress far enough for STS2 to write the multiplayer run save.
-9. Confirm `MultiplayerSaveSlots/index.json` gains a new campaign id.
-10. Re-open `Host -> Standard` and confirm the new campaign appears in the picker.
-11. Confirm the picker shows real roster labels, compacts 4+ player runs as `First, Second +N`, and omits progress when no safe act/floor value is available.
-12. Open `Details` on a campaign row and confirm it shows progress, player count, timestamps, campaign id, and the full roster for a 4+ player campaign.
-13. Select an older `Unknown party` campaign, then re-open the picker and confirm metadata repair updates the row if STS2 exposes roster/progress data.
-14. In an existing campaign's loaded-run lobby, change the participant set if possible, press `Embark`, and confirm the compatibility warning appears once before the next identical `Embark` attempt proceeds to vanilla validation.
-15. With an unmanaged `current_run_mp.save` fixture applied, choose a host action and confirm the recovery modal offers `Duplicate Active Save`.
-16. With a managed active save changed after activation, choose a different campaign and confirm the recovery modal offers `Sync Active Save`.
+7. Confirm hosting continues to the multiplayer lobby or character-select screen.
+8. If `RemoveMultiplayerPlayerLimit` is installed, confirm the log records the RMP hosted lobby path/capacity.
+
+STS2 does not write a multiplayer run save from a solo host lobby. Save creation requires at least one joined player and a run that actually begins.
+
+Two-player save lifecycle:
+
+1. Invite at least one other player and begin a Standard multiplayer run.
+2. Progress far enough for STS2 to write the multiplayer run save.
+3. Confirm `MultiplayerSaveSlots/index.json` gains a new campaign id.
+4. Re-open `Host -> Standard` and confirm the new campaign appears in the picker.
+5. Confirm the picker shows real roster labels and omits progress when no safe act/floor value is available.
+6. Open `Details` on a campaign row and confirm it shows progress, player count, timestamps, campaign id, and the full roster.
+
+Expanded roster and recovery:
+
+1. With a 4+ player campaign, confirm roster labels compact as `First, Second +N`.
+2. Open `Details` on a 4+ player campaign row and confirm it shows the full roster.
+3. Select an older `Unknown party` campaign, then re-open the picker and confirm metadata repair updates the row if STS2 exposes roster/progress data.
+4. In an existing campaign's loaded-run lobby, change the participant set if possible, press `Embark`, and confirm the compatibility warning appears once before the next identical `Embark` attempt proceeds to vanilla validation.
+5. With an unmanaged `current_run_mp.save` fixture applied, choose a host action and confirm the recovery modal offers `Duplicate Active Save`.
+6. With a managed active save changed after activation, choose a different campaign and confirm the recovery modal offers `Sync Active Save`.
 
 Smoke reports and backups are written under `artifacts/smoke/`.
