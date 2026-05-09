@@ -8,6 +8,7 @@ public sealed class HostFlowSession
     public MultiplayerGameMode? SelectedGameMode { get; private set; }
     public bool IsPendingNewRun { get; private set; }
     public CampaignMetadataSnapshot PendingNewRunMetadata { get; private set; } = CampaignMetadataSnapshot.Empty;
+    private string? _acknowledgedCompatibilityWarningKey;
 
     public void SelectExistingCampaign(string campaignId, MultiplayerGameMode gameMode)
     {
@@ -15,6 +16,7 @@ public sealed class HostFlowSession
         SelectedGameMode = gameMode;
         IsPendingNewRun = false;
         PendingNewRunMetadata = CampaignMetadataSnapshot.Empty;
+        _acknowledgedCompatibilityWarningKey = null;
     }
 
     public void SelectNewRun(MultiplayerGameMode gameMode)
@@ -23,6 +25,7 @@ public sealed class HostFlowSession
         SelectedGameMode = gameMode;
         IsPendingNewRun = true;
         PendingNewRunMetadata = CampaignMetadataSnapshot.Empty;
+        _acknowledgedCompatibilityWarningKey = null;
     }
 
     public void CapturePendingNewRunMetadata(CampaignMetadataSnapshot metadata)
@@ -37,5 +40,15 @@ public sealed class HostFlowSession
         SelectedGameMode = null;
         IsPendingNewRun = false;
         PendingNewRunMetadata = CampaignMetadataSnapshot.Empty;
+        _acknowledgedCompatibilityWarningKey = null;
+    }
+
+    public bool ShouldShowCompatibilityWarning(string warningKey)
+    {
+        if (_acknowledgedCompatibilityWarningKey == warningKey)
+            return false;
+
+        _acknowledgedCompatibilityWarningKey = warningKey;
+        return true;
     }
 }

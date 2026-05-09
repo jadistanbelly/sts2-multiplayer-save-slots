@@ -23,6 +23,8 @@ public static class HostFlowControllerTests
         yield return new TestCase("compatibility checker skips empty expected roster", CompatibilityCheckerSkipsEmptyExpectedRoster);
         yield return new TestCase("compatibility checker skips roster without stable ids", CompatibilityCheckerSkipsRosterWithoutStableIds);
         yield return new TestCase("compatibility checker warning key is stable", CompatibilityCheckerWarningKeyIsStable);
+        yield return new TestCase("compatibility guard warns once for identical mismatch", CompatibilityGuardWarnsOnceForIdenticalMismatch);
+        yield return new TestCase("compatibility guard allows without selected campaign", CompatibilityGuardAllowsWithoutSelectedCampaign);
         yield return new TestCase("controller starts new run through continuation", ControllerStartsNewRunThroughContinuation);
         yield return new TestCase("controller does not start new run when active preflight fails", ControllerStopsStartNewWhenPreflightFails);
         yield return new TestCase("controller does not select session when start new continuation fails", ControllerStopsSessionSelectionWhenStartNewFails);
@@ -305,6 +307,44 @@ public static class HostFlowControllerTests
         ]) ?? throw new InvalidOperationException("Expected second compatibility warning");
 
         AssertEx.Equal(first.WarningKey, second.WarningKey);
+    }
+
+    private static void CompatibilityGuardWarnsOnceForIdenticalMismatch()
+    {
+        var session = new HostFlowSession();
+        session.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+        var warnings = new List<CampaignCompatibilityWarning>();
+        var guard = new LoadLobbyCompatibilityGuard(
+            session,
+            _ => CampaignWithRoster([
+                new PlayerIdentity("Steam:1", "Alice"),
+                new PlayerIdentity("Steam:2", "Bob")
+            ]),
+            () => [new PlayerIdentity("Steam:1", "Alice")],
+            warnings.Add);
+
+        var first = guard.ShouldAllowRunToBegin();
+        var second = guard.ShouldAllowRunToBegin();
+
+        AssertEx.False(first);
+        AssertEx.True(second);
+        AssertEx.Equal(1, warnings.Count);
+        AssertEx.True(warnings[0].Message.Contains("Missing original players: Bob", StringComparison.Ordinal));
+    }
+
+    private static void CompatibilityGuardAllowsWithoutSelectedCampaign()
+    {
+        var warnings = new List<CampaignCompatibilityWarning>();
+        var guard = new LoadLobbyCompatibilityGuard(
+            new HostFlowSession(),
+            _ => throw new InvalidOperationException("campaign lookup should not run"),
+            () => throw new InvalidOperationException("current roster should not run"),
+            warnings.Add);
+
+        var allowed = guard.ShouldAllowRunToBegin();
+
+        AssertEx.True(allowed);
+        AssertEx.Equal(0, warnings.Count);
     }
 
     private static void ControllerStartsNewRunThroughContinuation()
