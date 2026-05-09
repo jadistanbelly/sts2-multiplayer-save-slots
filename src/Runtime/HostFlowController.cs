@@ -37,7 +37,7 @@ public sealed class HostFlowController
     public MultiplayerSavePickerModel BuildPickerModel(MultiplayerGameMode gameMode)
     {
         var rows = new List<MultiplayerSavePickerRow> { MultiplayerSavePickerRow.StartNew() };
-        rows.AddRange(_bank.ListCampaigns(gameMode).Select(MultiplayerSavePickerRow.Campaign));
+        rows.AddRange(MultiplayerSavePickerRow.Campaigns(_bank.ListCampaigns(gameMode)));
 
         return new MultiplayerSavePickerModel(gameMode, rows);
     }

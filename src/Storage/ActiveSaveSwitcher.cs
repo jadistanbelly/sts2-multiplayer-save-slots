@@ -1,3 +1,5 @@
+using MultiplayerSaveSlots.Core;
+
 namespace MultiplayerSaveSlots.Storage;
 
 public sealed class ActiveSaveSwitcher
@@ -149,7 +151,10 @@ public sealed class ActiveSaveSwitcher
         });
     }
 
-    public void SyncBack(DateTimeOffset nowUtc, string? actOrFloor = null)
+    public void SyncBack(
+        DateTimeOffset nowUtc,
+        string? actOrFloor = null,
+        IReadOnlyList<PlayerIdentity>? capturedRoster = null)
     {
         if (!File.Exists(_statePath))
             throw new InvalidOperationException("Cannot sync active save without active campaign state");
@@ -180,13 +185,61 @@ public sealed class ActiveSaveSwitcher
         File.Copy(_activeSavePath, payloadPath, overwrite: true);
         var syncedPayloadChecksum = FileChecksum.Sha256(payloadPath);
         JsonFile.Write(_statePath, state with { ActiveChecksumAfterActivation = syncedPayloadChecksum });
+        var refreshedRoster = RefreshRoster(metadata.Roster, capturedRoster);
 
         _bank.UpdateMetadata(metadata with
         {
             ActiveChecksum = FileChecksum.Sha256(_activeSavePath),
             PayloadChecksum = syncedPayloadChecksum,
             LastPlayedAtUtc = nowUtc,
-            ActOrFloor = actOrFloor ?? metadata.ActOrFloor
+            ActOrFloor = actOrFloor ?? metadata.ActOrFloor,
+            Roster = refreshedRoster,
+            Label = CampaignLabeler.Build(refreshedRoster)
         });
     }
+
+    private static IReadOnlyList<PlayerIdentity> RefreshRoster(
+        IReadOnlyList<PlayerIdentity> existingRoster,
+        IReadOnlyList<PlayerIdentity>? capturedRoster)
+    {
+        if (capturedRoster is null || capturedRoster.Count == 0)
+            return existingRoster;
+
+        if (existingRoster.Count == 0)
+            return capturedRoster;
+
+        if (!AllStableIds(existingRoster) || !AllStableIds(capturedRoster))
+            return existingRoster;
+
+        var capturedGroups = capturedRoster
+            .GroupBy(player => player.StableId!, StringComparer.Ordinal)
+            .ToList();
+        if (capturedGroups.Any(group => group.Count() > 1))
+            return existingRoster;
+
+        var capturedById = capturedGroups.ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        if (capturedById.Count != existingRoster.Count ||
+            !existingRoster.Select(player => player.StableId!).All(capturedById.ContainsKey))
+        {
+            return existingRoster;
+        }
+
+        return existingRoster
+            .Select(existing => MergePlayer(existing, capturedById[existing.StableId!]))
+            .ToList();
+    }
+
+    private static PlayerIdentity MergePlayer(PlayerIdentity existing, PlayerIdentity captured) =>
+        existing with
+        {
+            DisplayName = string.IsNullOrWhiteSpace(captured.DisplayName)
+                ? existing.DisplayName
+                : captured.DisplayName,
+            SelectedCharacterId = string.IsNullOrWhiteSpace(captured.SelectedCharacterId)
+                ? existing.SelectedCharacterId
+                : captured.SelectedCharacterId
+        };
+
+    private static bool AllStableIds(IReadOnlyList<PlayerIdentity> roster) =>
+        roster.All(player => !string.IsNullOrWhiteSpace(player.StableId));
 }

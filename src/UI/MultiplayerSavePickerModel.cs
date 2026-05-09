@@ -29,6 +29,23 @@ public sealed record MultiplayerSavePickerRow(
     public static MultiplayerSavePickerRow StartNew() =>
         new(PickerRowKind.StartNewRun, "Start New Run", "Create a separate multiplayer run", null, null);
 
+    public static IReadOnlyList<MultiplayerSavePickerRow> Campaigns(IReadOnlyList<CampaignMetadata> campaigns)
+    {
+        var rows = campaigns.Select(Campaign).ToList();
+        var duplicateKeys = rows
+            .Where(row => row.Kind == PickerRowKind.Campaign)
+            .GroupBy(row => $"{row.Title}\u001f{row.Subtitle}", StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return rows
+            .Select(row => duplicateKeys.Contains($"{row.Title}\u001f{row.Subtitle}")
+                ? row.WithSubtitle($"{row.Subtitle} - ID {ShortValue(row.CampaignId)}")
+                : row)
+            .ToList();
+    }
+
     public static MultiplayerSavePickerRow Campaign(CampaignMetadata metadata)
     {
         var playerLabel = metadata.Roster.Count == 1 ? "1 player" : $"{metadata.Roster.Count} players";
@@ -44,6 +61,13 @@ public sealed record MultiplayerSavePickerRow(
             BuildDetails(metadata, subtitle));
     }
 
+    private MultiplayerSavePickerRow WithSubtitle(string subtitle) =>
+        this with
+        {
+            Subtitle = subtitle,
+            Details = Details is null ? null : Details with { Subtitle = subtitle }
+        };
+
     private static MultiplayerSavePickerDetails BuildDetails(CampaignMetadata metadata, string subtitle)
     {
         var progress = string.IsNullOrWhiteSpace(metadata.ActOrFloor) ? "Unknown" : metadata.ActOrFloor.Trim();
@@ -53,7 +77,8 @@ public sealed record MultiplayerSavePickerRow(
             $"Players: {metadata.Roster.Count}",
             $"Created: {FormatTimestamp(metadata.CreatedAtUtc)}",
             $"Last played: {FormatTimestamp(metadata.LastPlayedAtUtc)}",
-            $"Campaign id: {metadata.CampaignId}"
+            $"Campaign id: {ShortValue(metadata.CampaignId)}",
+            $"Save fingerprint: {ShortValue(metadata.PayloadChecksum ?? metadata.ActiveChecksum)}"
         };
 
         var rosterLines = metadata.Roster.Count == 0
@@ -64,7 +89,48 @@ public sealed record MultiplayerSavePickerRow(
     }
 
     private static string DisplayName(PlayerIdentity player) =>
-        string.IsNullOrWhiteSpace(player.DisplayName) ? "Unknown" : player.DisplayName.Trim();
+        FormatPlayerName(player, CharacterDisplayName(player.SelectedCharacterId));
+
+    private static string FormatPlayerName(PlayerIdentity player, string? characterName)
+    {
+        var displayName = string.IsNullOrWhiteSpace(player.DisplayName) ? "Unknown" : player.DisplayName.Trim();
+        return string.IsNullOrWhiteSpace(characterName) ? displayName : $"{displayName} - {characterName}";
+    }
+
+    private static string? CharacterDisplayName(string? selectedCharacterId)
+    {
+        if (string.IsNullOrWhiteSpace(selectedCharacterId))
+            return null;
+
+        var normalized = selectedCharacterId.Trim();
+        var knownName = normalized.ToUpperInvariant() switch
+        {
+            "CHARACTER.IRONCLAD" => "The Ironclad",
+            "CHARACTER.SILENT" => "The Silent",
+            "CHARACTER.DEFECT" => "The Defect",
+            "CHARACTER.NECROBINDER" => "The Necrobinder",
+            _ => null
+        };
+        if (knownName is not null)
+            return knownName;
+
+        var token = normalized.Contains('.', StringComparison.Ordinal)
+            ? normalized[(normalized.LastIndexOf('.') + 1)..]
+            : normalized;
+        token = token.Replace('_', ' ').Trim();
+        return string.IsNullOrWhiteSpace(token)
+            ? null
+            : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(token.ToLowerInvariant());
+    }
+
+    private static string ShortValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "Unknown";
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= 8 ? trimmed : trimmed[..8];
+    }
 
     private static string FormatTimestamp(DateTimeOffset timestamp) =>
         timestamp.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);

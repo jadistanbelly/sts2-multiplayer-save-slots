@@ -55,7 +55,7 @@ public sealed class Sts2ActiveSaveSync : IActiveSaveSync
         try
         {
             var metadata = CaptureMetadataOrEmpty();
-            _switcher.SyncBack(nowUtc, metadata.ActOrFloor);
+            _switcher.SyncBack(nowUtc, metadata.ActOrFloor, metadata.Roster);
             return OperationResult.Ok();
         }
         catch (Exception ex)

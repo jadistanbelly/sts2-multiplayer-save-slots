@@ -43,6 +43,7 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("recovery duplicates active save when metadata extractor fails", RecoveryDuplicatesActiveSaveWhenMetadataExtractorFails));
         tests.Add(new TestCase("recovery syncs active save to selected campaign", RecoverySyncsActiveSaveToSelectedCampaign));
         tests.Add(new TestCase("sync-back refreshes progress metadata", SyncBackRefreshesProgressMetadata));
+        tests.Add(new TestCase("active save sync refreshes roster character metadata", ActiveSaveSyncRefreshesRosterCharacterMetadata));
         tests.Add(new TestCase("active save sync finalizes pending new run when metadata extractor fails", ActiveSaveSyncFinalizesPendingNewRunWhenMetadataExtractorFails));
         tests.Add(new TestCase("metadata repair updates empty roster and progress", MetadataRepairUpdatesEmptyRosterAndProgress));
         tests.Add(new TestCase("metadata repair preserves existing roster", MetadataRepairPreservesExistingRoster));
@@ -309,6 +310,40 @@ public static class ActiveSaveSwitcherTests
 
         var updated = bank.GetCampaign(metadata.CampaignId);
         AssertEx.Equal("buddy1", updated.Roster[0].DisplayName);
+        AssertEx.Equal("Floor 5", updated.ActOrFloor);
+    }
+
+    private static void ActiveSaveSyncRefreshesRosterCharacterMetadata()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        File.WriteAllText(source, "campaign");
+
+        var now = new DateTimeOffset(2026, 5, 8, 16, 0, 0, TimeSpan.Zero);
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [new PlayerIdentity("steam:1", "buddy1")],
+            source,
+            DateTimeOffset.UtcNow,
+            "Floor 4"));
+        var switcher = new ActiveSaveSwitcher(bank, active, Path.Combine(temp.Path, "active-state.json"));
+        var sync = new Sts2ActiveSaveSync(
+            bank,
+            switcher,
+            active,
+            new FakeCampaignMetadataExtractor(new CampaignMetadataSnapshot(
+                [new PlayerIdentity("steam:1", "buddy1", "CHARACTER.IRONCLAD")],
+                "Floor 5")));
+
+        switcher.Activate(metadata.CampaignId, DateTimeOffset.UtcNow);
+        File.WriteAllText(active, "campaign-progress");
+        var result = sync.SyncBack(now);
+
+        AssertEx.True(result.Success);
+        var updated = bank.GetCampaign(metadata.CampaignId);
+        AssertEx.Equal("CHARACTER.IRONCLAD", updated.Roster[0].SelectedCharacterId);
         AssertEx.Equal("Floor 5", updated.ActOrFloor);
     }
 

@@ -14,8 +14,10 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session tracks pending new run", SessionTracksPendingNewRun);
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
+        yield return new TestCase("controller disambiguates duplicate picker rows", ControllerDisambiguatesDuplicatePickerRows);
         yield return new TestCase("picker subtitle omits unknown progress", PickerSubtitleOmitsUnknownProgress);
         yield return new TestCase("picker campaign row includes full details", PickerCampaignRowIncludesFullDetails);
+        yield return new TestCase("picker details show selected characters", PickerDetailsShowSelectedCharacters);
         yield return new TestCase("picker details handle missing progress and roster", PickerDetailsHandleMissingProgressAndRoster);
         yield return new TestCase("picker start new row has no details", PickerStartNewRowHasNoDetails);
         yield return new TestCase("compatibility checker allows matching stable ids", CompatibilityCheckerAllowsMatchingStableIds);
@@ -160,6 +162,48 @@ public static class HostFlowControllerTests
         AssertEx.Equal("Floor 7 - 2 players", model.Rows[1].Subtitle);
     }
 
+    private static void ControllerDisambiguatesDuplicatePickerRows()
+    {
+        var roster = new[]
+        {
+            new PlayerIdentity("steam:1", "phatstatss"),
+            new PlayerIdentity("steam:2", "Magical Crocs")
+        };
+        var bank = new FakeHostFlowSaveBank
+        {
+            Campaigns =
+            [
+                new CampaignMetadata(
+                    "11111111111111111111111111111111",
+                    MultiplayerGameMode.Standard,
+                    "phatstatss, Magical Crocs",
+                    roster,
+                    DateTimeOffset.Parse("2026-05-09T20:58:00Z"),
+                    DateTimeOffset.Parse("2026-05-09T21:10:00Z"),
+                    null,
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "Floor 3"),
+                new CampaignMetadata(
+                    "22222222222222222222222222222222",
+                    MultiplayerGameMode.Standard,
+                    "phatstatss, Magical Crocs",
+                    roster,
+                    DateTimeOffset.Parse("2026-05-09T21:24:00Z"),
+                    DateTimeOffset.Parse("2026-05-09T21:30:00Z"),
+                    null,
+                    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "Floor 3")
+            ]
+        };
+
+        var model = CreateController(bank).BuildPickerModel(MultiplayerGameMode.Standard);
+
+        AssertEx.Equal("Floor 3 - 2 players - ID 11111111", model.Rows[1].Subtitle);
+        AssertEx.Equal("Floor 3 - 2 players - ID 22222222", model.Rows[2].Subtitle);
+        AssertEx.Equal("Floor 3 - 2 players - ID 11111111", model.Rows[1].Details?.Subtitle);
+        AssertEx.Equal("Floor 3 - 2 players - ID 22222222", model.Rows[2].Details?.Subtitle);
+    }
+
     private static void PickerSubtitleOmitsUnknownProgress()
     {
         var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
@@ -204,17 +248,40 @@ public static class HostFlowControllerTests
 
         AssertEx.Equal("buddy1, buddy2 +2", details.Title);
         AssertEx.Equal("Floor 18 - 4 players", details.Subtitle);
-        AssertEx.Equal(5, details.SummaryLines.Count);
+        AssertEx.Equal(6, details.SummaryLines.Count);
         AssertEx.Equal("Progress: Floor 18", details.SummaryLines[0]);
         AssertEx.Equal("Players: 4", details.SummaryLines[1]);
         AssertEx.Equal("Created: 2026-05-08 00:00 UTC", details.SummaryLines[2]);
         AssertEx.Equal("Last played: 2026-05-08 01:30 UTC", details.SummaryLines[3]);
-        AssertEx.Equal("Campaign id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", details.SummaryLines[4]);
+        AssertEx.Equal("Campaign id: aaaaaaaa", details.SummaryLines[4]);
+        AssertEx.Equal("Save fingerprint: checksum", details.SummaryLines[5]);
         AssertEx.Equal(4, details.RosterLines.Count);
         AssertEx.Equal("1. buddy1", details.RosterLines[0]);
         AssertEx.Equal("2. buddy2", details.RosterLines[1]);
         AssertEx.Equal("3. buddy3", details.RosterLines[2]);
         AssertEx.Equal("4. buddy4", details.RosterLines[3]);
+    }
+
+    private static void PickerDetailsShowSelectedCharacters()
+    {
+        var constructor = typeof(PlayerIdentity).GetConstructor([typeof(string), typeof(string), typeof(string)]);
+        AssertEx.True(constructor is not null, "PlayerIdentity should capture a selected character id");
+        var player = (PlayerIdentity)constructor!.Invoke(["steam:1", "phatstatss", "CHARACTER.IRONCLAD"]);
+
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "cccccccccccccccccccccccccccccccc",
+            MultiplayerGameMode.Standard,
+            "phatstatss",
+            [player],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T01:30:00Z"),
+            null,
+            "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+            "Floor 18"));
+
+        var details = row.Details ?? throw new InvalidOperationException("Expected campaign details");
+
+        AssertEx.Equal("1. phatstatss - The Ironclad", details.RosterLines[0]);
     }
 
     private static void PickerDetailsHandleMissingProgressAndRoster()
