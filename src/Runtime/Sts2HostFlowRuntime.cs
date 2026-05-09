@@ -116,7 +116,12 @@ public static class Sts2HostFlowRuntime
             new ActiveSaveReplacementGuard(paths.ActiveSavePath, paths.ActiveStatePath),
             new DelegateActiveSaveActivator(switcher.Activate, switcher.RestorePreviousActive),
             new Sts2HostFlowContinuation(hostSubmenu),
-            new ActiveSaveRecoveryService(bank, switcher, paths.ActiveSavePath, paths.ActiveStatePath),
+            new ActiveSaveRecoveryService(
+                bank,
+                switcher,
+                paths.ActiveSavePath,
+                paths.ActiveStatePath,
+                new Sts2CampaignMetadataExtractor()),
             Session,
             new SystemClock());
     }
@@ -127,7 +132,7 @@ public static class Sts2HostFlowRuntime
         var bank = new MultiplayerSaveBank(new SaveBankPaths(paths.BankRootDirectory));
         var switcher = new ActiveSaveSwitcher(bank, paths.ActiveSavePath, paths.ActiveStatePath);
         return new SaveSyncController(
-            new Sts2ActiveSaveSync(bank, switcher, paths.ActiveSavePath),
+            new Sts2ActiveSaveSync(bank, switcher, paths.ActiveSavePath, new Sts2CampaignMetadataExtractor()),
             Session,
             new SystemClock());
     }

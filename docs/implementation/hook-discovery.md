@@ -218,3 +218,9 @@ The lower-level `RunSaveManager.SaveRun(AbstractRoom?)` is the method that write
 ## Phase 4 Safety Recovery
 
 Phase 4 does not add new STS2 hooks. It reuses the host picker flow and save-sync services to offer conservative recovery actions before the mod replaces `current_run_mp.save`.
+
+## Phase 7 Metadata Hooks
+
+Phase 7 captures pending new-run roster metadata from `StartRunLobby.BeginRunForAllPlayers(...)` before vanilla begins the run for all players. The lobby exposes `Players`, `NetService.Platform`, and each `LobbyPlayer.id`/`slotId`; display names are resolved through `PlatformUtil.GetPlayerName(platform, playerId)`.
+
+Active-save progress metadata is extracted from `SaveManager.Instance.LoadAndCanonicalizeMultiplayerRunSave(...)` into `SerializableRun`, using `CurrentActIndex`, `MapPointHistory`, `Players`, and `PlatformType`.
