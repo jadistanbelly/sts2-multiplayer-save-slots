@@ -75,6 +75,11 @@ internal static class ModalUiStyling
         button.FocusMode = Control.FocusModeEnum.All;
     }
 
+    public static void StyleBadgePanel(PanelContainer panel)
+    {
+        panel.AddThemeStyleboxOverride("panel", CreateButtonStyle(ButtonBackground, PanelBorder, 2));
+    }
+
     private static StyleBoxFlat CreatePanelStyle()
     {
         var style = new StyleBoxFlat

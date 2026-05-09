@@ -11,13 +11,46 @@ public enum PickerRowKind
 
 public sealed record MultiplayerSavePickerModel(
     MultiplayerGameMode GameMode,
-    IReadOnlyList<MultiplayerSavePickerRow> Rows);
+    IReadOnlyList<MultiplayerSavePickerRow> Rows)
+{
+    public IReadOnlyList<MultiplayerSavePickerRow> CampaignRows =>
+        Rows.Where(row => row.Kind == PickerRowKind.Campaign).ToList();
+
+    public MultiplayerSavePickerRow? DefaultSelectedCampaign => CampaignRows.FirstOrDefault();
+
+    public static string EmptyPreviewTitle => "No saved runs";
+
+    public static string EmptyPreviewBody => "Start a new multiplayer run to create the first save slot.";
+
+    public static string CharacterBadgeText(string? selectedCharacterId)
+    {
+        if (string.IsNullOrWhiteSpace(selectedCharacterId))
+            return "??";
+
+        return selectedCharacterId.Trim().ToUpperInvariant() switch
+        {
+            "CHARACTER.IRONCLAD" => "IC",
+            "CHARACTER.SILENT" => "SI",
+            "CHARACTER.DEFECT" => "DE",
+            "CHARACTER.NECROBINDER" => "NE",
+            _ => "??"
+        };
+    }
+}
 
 public sealed record MultiplayerSavePickerDetails(
     string Title,
     string Subtitle,
     IReadOnlyList<string> SummaryLines,
-    IReadOnlyList<string> RosterLines);
+    IReadOnlyList<string> RosterLines)
+{
+    public IReadOnlyList<MultiplayerSavePickerRosterEntry> RosterEntries { get; init; } = [];
+}
+
+public sealed record MultiplayerSavePickerRosterEntry(
+    string Text,
+    string? SelectedCharacterId,
+    bool HasKnownPlayer);
 
 public sealed record MultiplayerSavePickerRow(
     PickerRowKind Kind,
@@ -81,11 +114,20 @@ public sealed record MultiplayerSavePickerRow(
             $"Save fingerprint: {ShortValue(metadata.PayloadChecksum ?? metadata.ActiveChecksum)}"
         };
 
-        var rosterLines = metadata.Roster.Count == 0
-            ? ["Unknown party"]
-            : metadata.Roster.Select((player, index) => $"{index + 1}. {DisplayName(player)}").ToArray();
+        var rosterEntries = metadata.Roster.Count == 0
+            ? [new MultiplayerSavePickerRosterEntry("Unknown party", null, false)]
+            : metadata.Roster
+                .Select((player, index) => new MultiplayerSavePickerRosterEntry(
+                    $"{index + 1}. {DisplayName(player)}",
+                    player.SelectedCharacterId,
+                    true))
+                .ToArray();
+        var rosterLines = rosterEntries.Select(entry => entry.Text).ToArray();
 
-        return new MultiplayerSavePickerDetails(metadata.Label, subtitle, summaryLines, rosterLines);
+        return new MultiplayerSavePickerDetails(metadata.Label, subtitle, summaryLines, rosterLines)
+        {
+            RosterEntries = rosterEntries
+        };
     }
 
     private static string DisplayName(PlayerIdentity player) =>

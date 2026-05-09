@@ -14,6 +14,9 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session tracks pending new run", SessionTracksPendingNewRun);
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
+        yield return new TestCase("picker model exposes default selected campaign", PickerModelExposesDefaultSelectedCampaign);
+        yield return new TestCase("picker model describes empty campaign list", PickerModelDescribesEmptyCampaignList);
+        yield return new TestCase("picker character badge labels are stable", PickerCharacterBadgeLabelsAreStable);
         yield return new TestCase("controller disambiguates duplicate picker rows", ControllerDisambiguatesDuplicatePickerRows);
         yield return new TestCase("picker subtitle omits unknown progress", PickerSubtitleOmitsUnknownProgress);
         yield return new TestCase("picker campaign row includes full details", PickerCampaignRowIncludesFullDetails);
@@ -160,6 +163,71 @@ public static class HostFlowControllerTests
         AssertEx.Equal(PickerRowKind.Campaign, model.Rows[1].Kind);
         AssertEx.Equal("buddy1 + buddy2", model.Rows[1].Title);
         AssertEx.Equal("Floor 7 - 2 players", model.Rows[1].Subtitle);
+    }
+
+    private static void PickerModelExposesDefaultSelectedCampaign()
+    {
+        var model = new MultiplayerSavePickerModel(
+            MultiplayerGameMode.Standard,
+            [
+                MultiplayerSavePickerRow.StartNew(),
+                MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    MultiplayerGameMode.Standard,
+                    "Alice, Bob",
+                    [new PlayerIdentity("steam:1", "Alice"), new PlayerIdentity("steam:2", "Bob")],
+                    DateTimeOffset.Parse("2026-05-09T20:00:00Z"),
+                    DateTimeOffset.Parse("2026-05-09T20:30:00Z"),
+                    null,
+                    "checksum",
+                    "Floor 3"))
+            ]);
+
+        var campaignRowsProperty = typeof(MultiplayerSavePickerModel).GetProperty("CampaignRows")
+            ?? throw new InvalidOperationException("CampaignRows helper was not found");
+        var defaultSelectedProperty = typeof(MultiplayerSavePickerModel).GetProperty("DefaultSelectedCampaign")
+            ?? throw new InvalidOperationException("DefaultSelectedCampaign helper was not found");
+
+        var campaignRows = (IReadOnlyList<MultiplayerSavePickerRow>)campaignRowsProperty.GetValue(model)!;
+        var defaultSelected = (MultiplayerSavePickerRow?)defaultSelectedProperty.GetValue(model);
+
+        AssertEx.Equal(1, campaignRows.Count);
+        AssertEx.Equal("Alice, Bob", campaignRows[0].Title);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", defaultSelected?.CampaignId);
+    }
+
+    private static void PickerModelDescribesEmptyCampaignList()
+    {
+        var model = new MultiplayerSavePickerModel(MultiplayerGameMode.Standard, [MultiplayerSavePickerRow.StartNew()]);
+        var campaignRowsProperty = typeof(MultiplayerSavePickerModel).GetProperty("CampaignRows")
+            ?? throw new InvalidOperationException("CampaignRows helper was not found");
+        var defaultSelectedProperty = typeof(MultiplayerSavePickerModel).GetProperty("DefaultSelectedCampaign")
+            ?? throw new InvalidOperationException("DefaultSelectedCampaign helper was not found");
+        var emptyTitleProperty = typeof(MultiplayerSavePickerModel).GetProperty("EmptyPreviewTitle")
+            ?? throw new InvalidOperationException("EmptyPreviewTitle helper was not found");
+        var emptyBodyProperty = typeof(MultiplayerSavePickerModel).GetProperty("EmptyPreviewBody")
+            ?? throw new InvalidOperationException("EmptyPreviewBody helper was not found");
+
+        var campaignRows = (IReadOnlyList<MultiplayerSavePickerRow>)campaignRowsProperty.GetValue(model)!;
+        var defaultSelected = (MultiplayerSavePickerRow?)defaultSelectedProperty.GetValue(model);
+
+        AssertEx.Equal(0, campaignRows.Count);
+        AssertEx.Equal(null, defaultSelected);
+        AssertEx.Equal("No saved runs", emptyTitleProperty.GetValue(null));
+        AssertEx.Equal("Start a new multiplayer run to create the first save slot.", emptyBodyProperty.GetValue(null));
+    }
+
+    private static void PickerCharacterBadgeLabelsAreStable()
+    {
+        var badgeText = typeof(MultiplayerSavePickerModel).GetMethod("CharacterBadgeText")
+            ?? throw new InvalidOperationException("CharacterBadgeText helper was not found");
+
+        AssertEx.Equal("IC", badgeText.Invoke(null, ["CHARACTER.IRONCLAD"]));
+        AssertEx.Equal("SI", badgeText.Invoke(null, ["CHARACTER.SILENT"]));
+        AssertEx.Equal("DE", badgeText.Invoke(null, ["CHARACTER.DEFECT"]));
+        AssertEx.Equal("NE", badgeText.Invoke(null, ["CHARACTER.NECROBINDER"]));
+        AssertEx.Equal("??", badgeText.Invoke(null, ["CHARACTER.UNKNOWN"]));
+        AssertEx.Equal("??", badgeText.Invoke(null, [null]));
     }
 
     private static void ControllerDisambiguatesDuplicatePickerRows()
