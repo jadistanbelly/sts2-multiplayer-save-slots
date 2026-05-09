@@ -4,13 +4,13 @@ Slay the Spire 2 mod in development to let a host keep multiple multiplayer camp
 
 ## Status
 
-Private development. Phase 9 adds best-effort metadata repair for older campaign entries after activation.
+Private development. Phase 10 adds loaded-run compatibility warnings when the current lobby appears to differ from the selected campaign's stored original roster.
 
 The picker can start a new vanilla run or activate an existing campaign payload from the save bank before resuming the vanilla host flow. After vanilla writes `current_run_mp.save`, the mod syncs existing selected campaigns back to the bank and finalizes newly started runs as separate bank campaigns.
 
 If an active multiplayer save is unmanaged or has unsynced changes, the picker now offers conservative recovery actions before continuing. It can duplicate an unmanaged active save into the bank or sync active changes back to the owning campaign.
 
-Newly finalized or duplicated runs use live lobby/save metadata where STS2 exposes it. Campaign titles compact large rosters as `First, Second +N`, picker subtitles include best-effort progress such as `Floor 18` when safely readable, and each campaign row has a `Details` action for viewing the full stored roster and metadata. Older `Unknown party` campaigns can self-repair missing display metadata after they are selected and safely activated.
+Newly finalized or duplicated runs use live lobby/save metadata where STS2 exposes it. Campaign titles compact large rosters as `First, Second +N`, picker subtitles include best-effort progress such as `Floor 18` when safely readable, and each campaign row has a `Details` action for viewing the full stored roster and metadata. Older `Unknown party` campaigns can self-repair missing display metadata after they are selected and safely activated. When an existing loaded-run lobby's current participant ids differ from the selected campaign roster, the mod shows an embark-time compatibility warning once before deferring back to vanilla validation.
 
 ## Design
 
@@ -118,7 +118,8 @@ Manual in-game checklist after setup:
 11. Confirm the picker shows real roster labels, compacts 4+ player runs as `First, Second +N`, and omits progress when no safe act/floor value is available.
 12. Open `Details` on a campaign row and confirm it shows progress, player count, timestamps, campaign id, and the full roster for a 4+ player campaign.
 13. Select an older `Unknown party` campaign, then re-open the picker and confirm metadata repair updates the row if STS2 exposes roster/progress data.
-14. With an unmanaged `current_run_mp.save` fixture applied, choose a host action and confirm the recovery modal offers `Duplicate Active Save`.
-15. With a managed active save changed after activation, choose a different campaign and confirm the recovery modal offers `Sync Active Save`.
+14. In an existing campaign's loaded-run lobby, change the participant set if possible, press `Embark`, and confirm the compatibility warning appears once before the next identical `Embark` attempt proceeds to vanilla validation.
+15. With an unmanaged `current_run_mp.save` fixture applied, choose a host action and confirm the recovery modal offers `Duplicate Active Save`.
+16. With a managed active save changed after activation, choose a different campaign and confirm the recovery modal offers `Sync Active Save`.
 
 Smoke reports and backups are written under `artifacts/smoke/`.

@@ -1,6 +1,9 @@
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Helpers;
+using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
+using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Platform;
 using MegaCrit.Sts2.Core.Platform.Steam;
@@ -137,6 +140,38 @@ public static class Sts2HostFlowRuntime
             new Sts2ActiveSaveSync(bank, switcher, paths.ActiveSavePath, new Sts2CampaignMetadataExtractor()),
             Session,
             new SystemClock());
+    }
+
+    public static LoadLobbyCompatibilityGuard CreateLoadLobbyCompatibilityGuard(NMultiplayerLoadGameScreen loadGameScreen)
+    {
+        var paths = CreatePaths();
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(paths.BankRootDirectory));
+        return new LoadLobbyCompatibilityGuard(
+            Session,
+            bank.GetCampaign,
+            () => CaptureLoadLobbyRoster(loadGameScreen),
+            ShowCompatibilityWarning);
+    }
+
+    private static IReadOnlyList<PlayerIdentity> CaptureLoadLobbyRoster(NMultiplayerLoadGameScreen loadGameScreen)
+    {
+        var field = AccessTools.Field(typeof(NMultiplayerLoadGameScreen), "_runLobby")
+            ?? throw new InvalidOperationException("NMultiplayerLoadGameScreen._runLobby field was not found.");
+        var lobby = field.GetValue(loadGameScreen) as LoadRunLobby
+            ?? throw new InvalidOperationException("Load-run lobby is not available.");
+
+        return Sts2CampaignMetadataExtractor.FromLoadRunLobby(lobby).Roster;
+    }
+
+    private static void ShowCompatibilityWarning(CampaignCompatibilityWarning warning)
+    {
+        var popup = NErrorPopup.Create(warning.Title, warning.Message, showReportBugButton: false);
+        var container = NModalContainer.Instance;
+        if (popup is null || container is null)
+            throw new InvalidOperationException("Compatibility warning popup is not available.");
+
+        container.Clear();
+        container.Add(popup);
     }
 
     public static MultiplayerSaveRuntimePaths CreatePaths()

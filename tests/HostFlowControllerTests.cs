@@ -17,6 +17,15 @@ public static class HostFlowControllerTests
         yield return new TestCase("picker campaign row includes full details", PickerCampaignRowIncludesFullDetails);
         yield return new TestCase("picker details handle missing progress and roster", PickerDetailsHandleMissingProgressAndRoster);
         yield return new TestCase("picker start new row has no details", PickerStartNewRowHasNoDetails);
+        yield return new TestCase("compatibility checker allows matching stable ids", CompatibilityCheckerAllowsMatchingStableIds);
+        yield return new TestCase("compatibility checker warns for missing expected players", CompatibilityCheckerWarnsForMissingExpectedPlayers);
+        yield return new TestCase("compatibility checker warns for extra current players", CompatibilityCheckerWarnsForExtraCurrentPlayers);
+        yield return new TestCase("compatibility checker skips empty expected roster", CompatibilityCheckerSkipsEmptyExpectedRoster);
+        yield return new TestCase("compatibility checker skips roster without stable ids", CompatibilityCheckerSkipsRosterWithoutStableIds);
+        yield return new TestCase("compatibility checker warning key is stable", CompatibilityCheckerWarningKeyIsStable);
+        yield return new TestCase("compatibility guard warns once for identical mismatch", CompatibilityGuardWarnsOnceForIdenticalMismatch);
+        yield return new TestCase("compatibility guard acknowledges after warning display", CompatibilityGuardAcknowledgesAfterWarningDisplay);
+        yield return new TestCase("compatibility guard allows without selected campaign", CompatibilityGuardAllowsWithoutSelectedCampaign);
         yield return new TestCase("controller starts new run through continuation", ControllerStartsNewRunThroughContinuation);
         yield return new TestCase("controller does not start new run when active preflight fails", ControllerStopsStartNewWhenPreflightFails);
         yield return new TestCase("controller does not select session when start new continuation fails", ControllerStopsSessionSelectionWhenStartNewFails);
@@ -211,6 +220,167 @@ public static class HostFlowControllerTests
         var row = MultiplayerSavePickerRow.StartNew();
 
         AssertEx.Equal(null, row.Details);
+    }
+
+    private static void CompatibilityCheckerAllowsMatchingStableIds()
+    {
+        var metadata = CampaignWithRoster([
+            new PlayerIdentity("Steam:1", "Alice"),
+            new PlayerIdentity("Steam:2", "Bob")
+        ]);
+
+        var warning = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:2", "Bob"),
+            new PlayerIdentity("Steam:1", "Alice")
+        ]);
+
+        AssertEx.Equal(null, warning);
+    }
+
+    private static void CompatibilityCheckerWarnsForMissingExpectedPlayers()
+    {
+        var metadata = CampaignWithRoster([
+            new PlayerIdentity("Steam:1", "Alice"),
+            new PlayerIdentity("Steam:2", "Bob")
+        ]);
+
+        var warning = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:1", "Alice")
+        ]) ?? throw new InvalidOperationException("Expected compatibility warning");
+
+        AssertEx.True(warning.Message.Contains("Missing original players: Bob", StringComparison.Ordinal));
+        AssertEx.False(warning.Message.Contains("Extra current players:", StringComparison.Ordinal));
+    }
+
+    private static void CompatibilityCheckerWarnsForExtraCurrentPlayers()
+    {
+        var metadata = CampaignWithRoster([
+            new PlayerIdentity("Steam:1", "Alice")
+        ]);
+
+        var warning = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:1", "Alice"),
+            new PlayerIdentity("Steam:3", "Casey")
+        ]) ?? throw new InvalidOperationException("Expected compatibility warning");
+
+        AssertEx.True(warning.Message.Contains("Extra current players: Casey", StringComparison.Ordinal));
+        AssertEx.False(warning.Message.Contains("Missing original players:", StringComparison.Ordinal));
+    }
+
+    private static void CompatibilityCheckerSkipsEmptyExpectedRoster()
+    {
+        var metadata = CampaignWithRoster([]);
+
+        var warning = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:1", "Alice")
+        ]);
+
+        AssertEx.Equal(null, warning);
+    }
+
+    private static void CompatibilityCheckerSkipsRosterWithoutStableIds()
+    {
+        var metadata = CampaignWithRoster([
+            new PlayerIdentity(null, "Alice")
+        ]);
+
+        var warning = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:1", "Alice")
+        ]);
+
+        AssertEx.Equal(null, warning);
+    }
+
+    private static void CompatibilityCheckerWarningKeyIsStable()
+    {
+        var metadata = CampaignWithRoster([
+            new PlayerIdentity("Steam:1", "Alice"),
+            new PlayerIdentity("Steam:2", "Bob")
+        ]);
+
+        var first = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:1", "Alice"),
+            new PlayerIdentity("Steam:3", "Casey")
+        ]) ?? throw new InvalidOperationException("Expected first compatibility warning");
+        var second = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:3", "Casey"),
+            new PlayerIdentity("Steam:1", "Alice")
+        ]) ?? throw new InvalidOperationException("Expected second compatibility warning");
+
+        AssertEx.Equal(first.WarningKey, second.WarningKey);
+    }
+
+    private static void CompatibilityGuardWarnsOnceForIdenticalMismatch()
+    {
+        var session = new HostFlowSession();
+        session.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+        var warnings = new List<CampaignCompatibilityWarning>();
+        var guard = new LoadLobbyCompatibilityGuard(
+            session,
+            _ => CampaignWithRoster([
+                new PlayerIdentity("Steam:1", "Alice"),
+                new PlayerIdentity("Steam:2", "Bob")
+            ]),
+            () => [new PlayerIdentity("Steam:1", "Alice")],
+            warnings.Add);
+
+        var first = guard.ShouldAllowRunToBegin();
+        var second = guard.ShouldAllowRunToBegin();
+
+        AssertEx.False(first);
+        AssertEx.True(second);
+        AssertEx.Equal(1, warnings.Count);
+        AssertEx.True(warnings[0].Message.Contains("Missing original players: Bob", StringComparison.Ordinal));
+    }
+
+    private static void CompatibilityGuardAcknowledgesAfterWarningDisplay()
+    {
+        var session = new HostFlowSession();
+        session.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+
+        var failingGuard = new LoadLobbyCompatibilityGuard(
+            session,
+            _ => CampaignWithRoster([
+                new PlayerIdentity("Steam:1", "Alice"),
+                new PlayerIdentity("Steam:2", "Bob")
+            ]),
+            () => [new PlayerIdentity("Steam:1", "Alice")],
+            _ => throw new InvalidOperationException("warning UI failed"));
+
+        var allowedAfterFailure = failingGuard.ShouldAllowRunToBegin();
+
+        var warnings = new List<CampaignCompatibilityWarning>();
+        var workingGuard = new LoadLobbyCompatibilityGuard(
+            session,
+            _ => CampaignWithRoster([
+                new PlayerIdentity("Steam:1", "Alice"),
+                new PlayerIdentity("Steam:2", "Bob")
+            ]),
+            () => [new PlayerIdentity("Steam:1", "Alice")],
+            warnings.Add);
+
+        var allowedAfterDisplay = workingGuard.ShouldAllowRunToBegin();
+        var allowedAfterAcknowledgement = workingGuard.ShouldAllowRunToBegin();
+
+        AssertEx.True(allowedAfterFailure);
+        AssertEx.False(allowedAfterDisplay);
+        AssertEx.True(allowedAfterAcknowledgement);
+        AssertEx.Equal(1, warnings.Count);
+    }
+
+    private static void CompatibilityGuardAllowsWithoutSelectedCampaign()
+    {
+        var warnings = new List<CampaignCompatibilityWarning>();
+        var guard = new LoadLobbyCompatibilityGuard(
+            new HostFlowSession(),
+            _ => throw new InvalidOperationException("campaign lookup should not run"),
+            () => throw new InvalidOperationException("current roster should not run"),
+            warnings.Add);
+
+        var allowed = guard.ShouldAllowRunToBegin();
+
+        AssertEx.True(allowed);
+        AssertEx.Equal(0, warnings.Count);
     }
 
     private static void ControllerStartsNewRunThroughContinuation()
@@ -600,6 +770,18 @@ public static class HostFlowControllerTests
             new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")),
             metadataRepair ?? new FakeActivatedCampaignMetadataRepair());
     }
+
+    private static CampaignMetadata CampaignWithRoster(IReadOnlyList<PlayerIdentity> roster) =>
+        new(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard,
+            CampaignLabeler.Build(roster),
+            roster,
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T01:00:00Z"),
+            null,
+            "checksum",
+            "Floor 7");
 
     private sealed class FixedClock(DateTimeOffset utcNow) : IClock
     {
