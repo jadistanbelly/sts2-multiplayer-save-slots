@@ -12,6 +12,7 @@ public sealed class HostFlowController
     private readonly IActiveSaveRecovery _recovery;
     private readonly HostFlowSession _session;
     private readonly IClock _clock;
+    private readonly IActivatedCampaignMetadataRepair _metadataRepair;
 
     public HostFlowController(
         IHostFlowSaveBank bank,
@@ -20,7 +21,8 @@ public sealed class HostFlowController
         IHostFlowContinuation continuation,
         IActiveSaveRecovery recovery,
         HostFlowSession session,
-        IClock clock)
+        IClock clock,
+        IActivatedCampaignMetadataRepair? metadataRepair = null)
     {
         _bank = bank;
         _preflight = preflight;
@@ -29,6 +31,7 @@ public sealed class HostFlowController
         _recovery = recovery;
         _session = session;
         _clock = clock;
+        _metadataRepair = metadataRepair ?? new NoOpActivatedCampaignMetadataRepair();
     }
 
     public MultiplayerSavePickerModel BuildPickerModel(MultiplayerGameMode gameMode)
@@ -81,6 +84,8 @@ public sealed class HostFlowController
         if (!activation.Success)
             return activation;
 
+        RepairActivatedCampaignMetadata(campaignId);
+
         var continuation = _continuation.LoadExistingRun();
         if (!continuation.Success)
         {
@@ -93,6 +98,18 @@ public sealed class HostFlowController
 
         _session.SelectExistingCampaign(campaignId, gameMode);
         return continuation;
+    }
+
+    private void RepairActivatedCampaignMetadata(string campaignId)
+    {
+        try
+        {
+            _metadataRepair.RepairActivatedCampaign(campaignId, _clock.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[MultiplayerSaveSlots] Failed to repair activated campaign metadata: {ex.Message}");
+        }
     }
 
     public OperationResult RecoverAndSelectExistingCampaign(

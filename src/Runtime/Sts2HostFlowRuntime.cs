@@ -111,6 +111,7 @@ public static class Sts2HostFlowRuntime
         var paths = CreatePaths();
         var bank = new MultiplayerSaveBank(new SaveBankPaths(paths.BankRootDirectory));
         var switcher = new ActiveSaveSwitcher(bank, paths.ActiveSavePath, paths.ActiveStatePath);
+        var metadataExtractor = new Sts2CampaignMetadataExtractor();
         return new HostFlowController(
             new Sts2SaveBankAdapter(bank),
             new ActiveSaveReplacementGuard(paths.ActiveSavePath, paths.ActiveStatePath),
@@ -121,9 +122,10 @@ public static class Sts2HostFlowRuntime
                 switcher,
                 paths.ActiveSavePath,
                 paths.ActiveStatePath,
-                new Sts2CampaignMetadataExtractor()),
+                metadataExtractor),
             Session,
-            new SystemClock());
+            new SystemClock(),
+            new ActivatedCampaignMetadataRepair(bank, metadataExtractor));
     }
 
     public static SaveSyncController CreateSaveSyncController()
