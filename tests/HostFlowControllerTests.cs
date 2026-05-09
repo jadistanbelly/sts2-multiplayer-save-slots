@@ -14,6 +14,9 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
         yield return new TestCase("picker subtitle omits unknown progress", PickerSubtitleOmitsUnknownProgress);
+        yield return new TestCase("picker campaign row includes full details", PickerCampaignRowIncludesFullDetails);
+        yield return new TestCase("picker details handle missing progress and roster", PickerDetailsHandleMissingProgressAndRoster);
+        yield return new TestCase("picker start new row has no details", PickerStartNewRowHasNoDetails);
         yield return new TestCase("controller starts new run through continuation", ControllerStartsNewRunThroughContinuation);
         yield return new TestCase("controller does not start new run when active preflight fails", ControllerStopsStartNewWhenPreflightFails);
         yield return new TestCase("controller does not select session when start new continuation fails", ControllerStopsSessionSelectionWhenStartNewFails);
@@ -142,6 +145,70 @@ public static class HostFlowControllerTests
 
         AssertEx.Equal("buddy1, buddy2 +2", row.Title);
         AssertEx.Equal("4 players", row.Subtitle);
+    }
+
+    private static void PickerCampaignRowIncludesFullDetails()
+    {
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard,
+            "buddy1, buddy2 +2",
+            [
+                new PlayerIdentity("1", "buddy1"),
+                new PlayerIdentity("2", "buddy2"),
+                new PlayerIdentity("3", "buddy3"),
+                new PlayerIdentity("4", "buddy4")
+            ],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T01:30:00Z"),
+            null,
+            "checksum",
+            "Floor 18"));
+
+        var details = row.Details ?? throw new InvalidOperationException("Expected campaign details");
+
+        AssertEx.Equal("buddy1, buddy2 +2", details.Title);
+        AssertEx.Equal("Floor 18 - 4 players", details.Subtitle);
+        AssertEx.Equal(5, details.SummaryLines.Count);
+        AssertEx.Equal("Progress: Floor 18", details.SummaryLines[0]);
+        AssertEx.Equal("Players: 4", details.SummaryLines[1]);
+        AssertEx.Equal("Created: 2026-05-08 00:00 UTC", details.SummaryLines[2]);
+        AssertEx.Equal("Last played: 2026-05-08 01:30 UTC", details.SummaryLines[3]);
+        AssertEx.Equal("Campaign id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", details.SummaryLines[4]);
+        AssertEx.Equal(4, details.RosterLines.Count);
+        AssertEx.Equal("1. buddy1", details.RosterLines[0]);
+        AssertEx.Equal("2. buddy2", details.RosterLines[1]);
+        AssertEx.Equal("3. buddy3", details.RosterLines[2]);
+        AssertEx.Equal("4. buddy4", details.RosterLines[3]);
+    }
+
+    private static void PickerDetailsHandleMissingProgressAndRoster()
+    {
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            MultiplayerGameMode.Standard,
+            "Unknown party",
+            [],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            null,
+            "checksum",
+            null));
+
+        var details = row.Details ?? throw new InvalidOperationException("Expected campaign details");
+
+        AssertEx.Equal("0 players", row.Subtitle);
+        AssertEx.Equal("Progress: Unknown", details.SummaryLines[0]);
+        AssertEx.Equal("Players: 0", details.SummaryLines[1]);
+        AssertEx.Equal(1, details.RosterLines.Count);
+        AssertEx.Equal("Unknown party", details.RosterLines[0]);
+    }
+
+    private static void PickerStartNewRowHasNoDetails()
+    {
+        var row = MultiplayerSavePickerRow.StartNew();
+
+        AssertEx.Equal(null, row.Details);
     }
 
     private static void ControllerStartsNewRunThroughContinuation()
