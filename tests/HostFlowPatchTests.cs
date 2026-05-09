@@ -2,6 +2,7 @@ using System.Reflection;
 using MultiplayerSaveSlots.Core;
 using MultiplayerSaveSlots.Patches;
 using MultiplayerSaveSlots.Runtime;
+using MultiplayerSaveSlots.UI;
 
 namespace MultiplayerSaveSlots.Tests;
 
@@ -16,6 +17,7 @@ public static class HostFlowPatchTests
         yield return new TestCase("save manager patch logs sync failure without failing vanilla save", SaveManagerPatchLogsSyncFailure);
         yield return new TestCase("save manager patch propagates vanilla task failure", SaveManagerPatchPropagatesVanillaFailure);
         yield return new TestCase("recovery modal exposes show method", RecoveryModalExposesShowMethod);
+        yield return new TestCase("picker modal builds details body text", PickerModalBuildsDetailsBodyText);
     }
 
     private static void GameModeMapHandlesAllModes()
@@ -148,6 +150,23 @@ public static class HostFlowPatchTests
         AssertEx.True(modalType is not null);
         var show = modalType!.GetMethod("Show", BindingFlags.Static | BindingFlags.Public);
         AssertEx.True(show is not null);
+    }
+
+    private static void PickerModalBuildsDetailsBodyText()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var buildDetailsBody = modalType!.GetMethod("BuildDetailsBody", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Details body helper was not found");
+        var details = new MultiplayerSavePickerDetails(
+            "buddy1, buddy2",
+            "Floor 18 - 2 players",
+            ["Progress: Floor 18", "Players: 2"],
+            ["1. buddy1", "2. buddy2"]);
+
+        var body = buildDetailsBody.Invoke(null, [details]);
+
+        AssertEx.Equal("Progress: Floor 18\nPlayers: 2\n\nRoster\n1. buddy1\n2. buddy2", body);
     }
 
     private static (FieldInfo ResumingField, MethodInfo Prefix, Type PatchType) GetHostSubmenuPatchMembers()
