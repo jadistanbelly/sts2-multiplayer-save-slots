@@ -70,7 +70,12 @@ public static class MultiplayerSaveBankTests
 
         var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
         var bank = new MultiplayerSaveBank(paths);
-        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, roster, payload, createdAt));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            roster,
+            payload,
+            createdAt,
+            "Floor 18"));
 
         var json = File.ReadAllText(paths.MetadataPath(metadata.CampaignId));
         var roundTrip = JsonFile.Read<CampaignMetadata>(paths.MetadataPath(metadata.CampaignId));
@@ -86,7 +91,7 @@ public static class MultiplayerSaveBankTests
         AssertEx.Equal(MultiplayerGameMode.Standard, roundTrip.GameMode);
         AssertEx.Equal(FileChecksum.Sha256(paths.PayloadPath(metadata.CampaignId)), roundTrip.PayloadChecksum);
         AssertEx.Equal(null, roundTrip.ActiveChecksum);
-        AssertEx.Equal(null, roundTrip.ActOrFloor);
+        AssertEx.Equal("Floor 18", roundTrip.ActOrFloor);
     }
 
     private static void WritesCreatedIdOnceInIndex()
