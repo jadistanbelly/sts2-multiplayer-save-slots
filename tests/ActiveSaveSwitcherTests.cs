@@ -40,8 +40,10 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("recovery offers sync for unsynced managed active save", RecoveryOffersSyncForUnsyncedManagedActiveSave));
         tests.Add(new TestCase("recovery duplicates active save into bank", RecoveryDuplicatesActiveSaveIntoBank));
         tests.Add(new TestCase("recovery duplicates active save with captured metadata", RecoveryDuplicatesActiveSaveWithCapturedMetadata));
+        tests.Add(new TestCase("recovery duplicates active save when metadata extractor fails", RecoveryDuplicatesActiveSaveWhenMetadataExtractorFails));
         tests.Add(new TestCase("recovery syncs active save to selected campaign", RecoverySyncsActiveSaveToSelectedCampaign));
         tests.Add(new TestCase("sync-back refreshes progress metadata", SyncBackRefreshesProgressMetadata));
+        tests.Add(new TestCase("active save sync finalizes pending new run when metadata extractor fails", ActiveSaveSyncFinalizesPendingNewRunWhenMetadataExtractorFails));
     }
 
     private static void ActivatesCampaign()
@@ -704,6 +706,33 @@ public static class ActiveSaveSwitcherTests
         AssertEx.Equal("Floor 18", campaigns[0].ActOrFloor);
     }
 
+    private static void RecoveryDuplicatesActiveSaveWhenMetadataExtractorFails()
+    {
+        using var temp = new TempDirectory();
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(active, "unmanaged-active");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+        var recovery = new ActiveSaveRecoveryService(
+            bank,
+            switcher,
+            active,
+            state,
+            new ThrowingCampaignMetadataExtractor());
+
+        var result = recovery.Recover(
+            ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign,
+            MultiplayerGameMode.Standard,
+            new DateTimeOffset(2026, 5, 8, 17, 0, 0, TimeSpan.Zero));
+
+        AssertEx.True(result.Success);
+        var campaigns = bank.ListCampaigns(MultiplayerGameMode.Standard);
+        AssertEx.Equal(1, campaigns.Count);
+        AssertEx.Equal("Unknown party", campaigns[0].Label);
+        AssertEx.Equal(null, campaigns[0].ActOrFloor);
+    }
+
     private static void RecoverySyncsActiveSaveToSelectedCampaign()
     {
         using var temp = new TempDirectory();
@@ -727,6 +756,29 @@ public static class ActiveSaveSwitcherTests
         AssertEx.Equal("campaign-progress", File.ReadAllText(bank.GetPayloadPath(metadata.CampaignId)));
     }
 
+    private static void ActiveSaveSyncFinalizesPendingNewRunWhenMetadataExtractorFails()
+    {
+        using var temp = new TempDirectory();
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(active, "new-campaign");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+        var sync = new Sts2ActiveSaveSync(bank, switcher, active, new ThrowingCampaignMetadataExtractor());
+
+        var result = sync.FinalizePendingNewRun(
+            MultiplayerGameMode.Standard,
+            new CampaignMetadataSnapshot([new PlayerIdentity("steam:1", "buddy1")], "Floor 3"),
+            new DateTimeOffset(2026, 5, 8, 18, 0, 0, TimeSpan.Zero));
+
+        AssertEx.True(result.Success);
+        var campaigns = bank.ListCampaigns(MultiplayerGameMode.Standard);
+        AssertEx.Equal(1, campaigns.Count);
+        AssertEx.Equal("buddy1", campaigns[0].Label);
+        AssertEx.Equal("Floor 3", campaigns[0].ActOrFloor);
+        AssertEx.Equal(campaigns[0].CampaignId, JsonFile.Read<ActiveSaveState>(state).CampaignId);
+    }
+
     private static string SingleFile(string directory)
     {
         var files = Directory.GetFiles(directory);
@@ -745,5 +797,11 @@ public static class ActiveSaveSwitcherTests
     private sealed class FakeCampaignMetadataExtractor(CampaignMetadataSnapshot snapshot) : ICampaignMetadataExtractor
     {
         public CampaignMetadataSnapshot CaptureActiveSaveMetadata() => snapshot;
+    }
+
+    private sealed class ThrowingCampaignMetadataExtractor : ICampaignMetadataExtractor
+    {
+        public CampaignMetadataSnapshot CaptureActiveSaveMetadata() =>
+            throw new InvalidOperationException("metadata unavailable");
     }
 }
