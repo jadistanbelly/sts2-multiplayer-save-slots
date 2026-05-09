@@ -149,7 +149,7 @@ public sealed class ActiveSaveSwitcher
         });
     }
 
-    public void SyncBack(DateTimeOffset nowUtc)
+    public void SyncBack(DateTimeOffset nowUtc, string? actOrFloor = null)
     {
         if (!File.Exists(_statePath))
             throw new InvalidOperationException("Cannot sync active save without active campaign state");
@@ -185,7 +185,8 @@ public sealed class ActiveSaveSwitcher
         {
             ActiveChecksum = FileChecksum.Sha256(_activeSavePath),
             PayloadChecksum = syncedPayloadChecksum,
-            LastPlayedAtUtc = nowUtc
+            LastPlayedAtUtc = nowUtc,
+            ActOrFloor = actOrFloor ?? metadata.ActOrFloor
         });
     }
 }

@@ -39,7 +39,9 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("recovery offers duplicate for unmanaged active save", RecoveryOffersDuplicateForUnmanagedActiveSave));
         tests.Add(new TestCase("recovery offers sync for unsynced managed active save", RecoveryOffersSyncForUnsyncedManagedActiveSave));
         tests.Add(new TestCase("recovery duplicates active save into bank", RecoveryDuplicatesActiveSaveIntoBank));
+        tests.Add(new TestCase("recovery duplicates active save with captured metadata", RecoveryDuplicatesActiveSaveWithCapturedMetadata));
         tests.Add(new TestCase("recovery syncs active save to selected campaign", RecoverySyncsActiveSaveToSelectedCampaign));
+        tests.Add(new TestCase("sync-back refreshes progress metadata", SyncBackRefreshesProgressMetadata));
     }
 
     private static void ActivatesCampaign()
@@ -277,6 +279,32 @@ public static class ActiveSaveSwitcherTests
         AssertEx.Equal(FileChecksum.Sha256(active), updated.ActiveChecksum);
         AssertEx.Equal(FileChecksum.Sha256(bank.GetPayloadPath(metadata.CampaignId)), updated.PayloadChecksum);
         AssertEx.Equal(now, updated.LastPlayedAtUtc);
+    }
+
+    private static void SyncBackRefreshesProgressMetadata()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        File.WriteAllText(source, "campaign");
+
+        var now = new DateTimeOffset(2026, 5, 8, 15, 30, 0, TimeSpan.Zero);
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [new PlayerIdentity("steam:1", "buddy1")],
+            source,
+            DateTimeOffset.UtcNow,
+            "Floor 4"));
+        var switcher = new ActiveSaveSwitcher(bank, active, Path.Combine(temp.Path, "active-state.json"));
+
+        switcher.Activate(metadata.CampaignId, DateTimeOffset.UtcNow);
+        File.WriteAllText(active, "campaign-progress");
+        switcher.SyncBack(now, "Floor 5");
+
+        var updated = bank.GetCampaign(metadata.CampaignId);
+        AssertEx.Equal("buddy1", updated.Roster[0].DisplayName);
+        AssertEx.Equal("Floor 5", updated.ActOrFloor);
     }
 
     private static void SyncBackRejectsMissingActiveSave()
@@ -647,6 +675,35 @@ public static class ActiveSaveSwitcherTests
         AssertEx.Equal(campaigns[0].CampaignId, JsonFile.Read<ActiveSaveState>(state).CampaignId);
     }
 
+    private static void RecoveryDuplicatesActiveSaveWithCapturedMetadata()
+    {
+        using var temp = new TempDirectory();
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(active, "unmanaged-active");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+        var recovery = new ActiveSaveRecoveryService(
+            bank,
+            switcher,
+            active,
+            state,
+            new FakeCampaignMetadataExtractor(new CampaignMetadataSnapshot(
+                [new PlayerIdentity("steam:1", "buddy1")],
+                "Floor 18")));
+
+        var result = recovery.Recover(
+            ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign,
+            MultiplayerGameMode.Standard,
+            new DateTimeOffset(2026, 5, 8, 17, 0, 0, TimeSpan.Zero));
+
+        AssertEx.True(result.Success);
+        var campaigns = bank.ListCampaigns(MultiplayerGameMode.Standard);
+        AssertEx.Equal(1, campaigns.Count);
+        AssertEx.Equal("buddy1", campaigns[0].Label);
+        AssertEx.Equal("Floor 18", campaigns[0].ActOrFloor);
+    }
+
     private static void RecoverySyncsActiveSaveToSelectedCampaign()
     {
         using var temp = new TempDirectory();
@@ -683,5 +740,10 @@ public static class ActiveSaveSwitcherTests
             return;
 
         AssertEx.Equal(0, Directory.GetFiles(directory).Length);
+    }
+
+    private sealed class FakeCampaignMetadataExtractor(CampaignMetadataSnapshot snapshot) : ICampaignMetadataExtractor
+    {
+        public CampaignMetadataSnapshot CaptureActiveSaveMetadata() => snapshot;
     }
 }

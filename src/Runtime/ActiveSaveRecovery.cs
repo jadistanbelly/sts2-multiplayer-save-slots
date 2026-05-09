@@ -46,17 +46,20 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
     private readonly ActiveSaveSwitcher _switcher;
     private readonly string _activeSavePath;
     private readonly string _statePath;
+    private readonly ICampaignMetadataExtractor _metadataExtractor;
 
     public ActiveSaveRecoveryService(
         MultiplayerSaveBank bank,
         ActiveSaveSwitcher switcher,
         string activeSavePath,
-        string statePath)
+        string statePath,
+        ICampaignMetadataExtractor? metadataExtractor = null)
     {
         _bank = bank;
         _switcher = switcher;
         _activeSavePath = activeSavePath;
         _statePath = statePath;
+        _metadataExtractor = metadataExtractor ?? new EmptyCampaignMetadataExtractor();
     }
 
     public ActiveSaveRecoveryModel BuildRecoveryModel(MultiplayerGameMode gameMode)
@@ -103,7 +106,13 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
             if (!File.Exists(_activeSavePath))
                 return OperationResult.Fail("Active multiplayer save is missing");
 
-            var metadata = _bank.CreateCampaign(new CampaignCreateRequest(gameMode, [], _activeSavePath, nowUtc));
+            var snapshot = CaptureMetadataOrEmpty();
+            var metadata = _bank.CreateCampaign(new CampaignCreateRequest(
+                gameMode,
+                snapshot.Roster,
+                _activeSavePath,
+                nowUtc,
+                snapshot.ActOrFloor));
             _switcher.ClaimActiveSave(metadata.CampaignId, nowUtc);
             return OperationResult.Ok();
         }
@@ -123,4 +132,17 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
                     "Duplicate Active Save",
                     "Copy the current active save into the Multiplayer Save Slots bank before continuing.")
             ]);
+
+    private CampaignMetadataSnapshot CaptureMetadataOrEmpty()
+    {
+        try
+        {
+            return _metadataExtractor.CaptureActiveSaveMetadata();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[MultiplayerSaveSlots] Failed to capture active save metadata: {ex.Message}");
+            return CampaignMetadataSnapshot.Empty;
+        }
+    }
 }

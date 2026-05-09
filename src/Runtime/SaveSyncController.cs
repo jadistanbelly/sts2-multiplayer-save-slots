@@ -43,7 +43,10 @@ public sealed class SaveSyncController : ISaveSyncRunner
 
     private OperationResult FinalizePendingNewRun(MultiplayerGameMode gameMode)
     {
-        var finalized = _activeSaveSync.FinalizePendingNewRun(gameMode, _clock.UtcNow);
+        var finalized = _activeSaveSync.FinalizePendingNewRun(
+            gameMode,
+            _session.PendingNewRunMetadata,
+            _clock.UtcNow);
         if (!finalized.Success || finalized.Value is null)
             return OperationResult.Fail(finalized.ErrorMessage ?? "Unable to finalize pending multiplayer save.");
 
