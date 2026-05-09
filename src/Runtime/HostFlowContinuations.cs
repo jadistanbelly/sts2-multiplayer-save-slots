@@ -28,7 +28,10 @@ public interface IHostFlowContinuation
 public interface IActiveSaveSync
 {
     OperationResult SyncBack(DateTimeOffset nowUtc);
-    OperationResult<string> FinalizePendingNewRun(MultiplayerGameMode gameMode, DateTimeOffset nowUtc);
+    OperationResult<string> FinalizePendingNewRun(
+        MultiplayerGameMode gameMode,
+        CampaignMetadataSnapshot metadata,
+        DateTimeOffset nowUtc);
 }
 
 public sealed class DelegateActiveSaveActivator : IActiveSaveActivator

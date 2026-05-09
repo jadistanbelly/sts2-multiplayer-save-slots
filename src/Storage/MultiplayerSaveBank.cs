@@ -36,7 +36,7 @@ public sealed class MultiplayerSaveBank
             request.CreatedAtUtc,
             ActiveChecksum: null,
             PayloadChecksum: payloadChecksum,
-            ActOrFloor: null);
+            ActOrFloor: request.ActOrFloor);
 
         JsonFile.Write(_paths.MetadataPath(campaignId), metadata);
         var index = ReadIndex();

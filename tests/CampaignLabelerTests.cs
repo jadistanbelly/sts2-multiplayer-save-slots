@@ -30,7 +30,7 @@ public static class CampaignLabelerTests
             new PlayerIdentity("steam:2", "buddy2")
         ]);
 
-        AssertEx.Equal("buddy1 + buddy2", label);
+        AssertEx.Equal("buddy1, buddy2", label);
     }
 
     private static void ManyPlayers()
@@ -43,7 +43,7 @@ public static class CampaignLabelerTests
             new PlayerIdentity("steam:5", "buddy5")
         ]);
 
-        AssertEx.Equal("buddy1 + buddy2 + 3 more", label);
+        AssertEx.Equal("buddy1, buddy2 +3", label);
     }
 
     private static void EmptyRoster()

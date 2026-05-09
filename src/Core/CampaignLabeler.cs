@@ -8,8 +8,8 @@ public static class CampaignLabeler
         {
             0 => "Unknown party",
             1 => NormalizeName(roster[0]),
-            2 => $"{NormalizeName(roster[0])} + {NormalizeName(roster[1])}",
-            _ => $"{NormalizeName(roster[0])} + {NormalizeName(roster[1])} + {roster.Count - 2} more"
+            2 => $"{NormalizeName(roster[0])}, {NormalizeName(roster[1])}",
+            _ => $"{NormalizeName(roster[0])}, {NormalizeName(roster[1])} +{roster.Count - 2}"
         };
     }
 

@@ -32,19 +32,26 @@ public sealed class Sts2ActiveSaveSync : IActiveSaveSync
     private readonly MultiplayerSaveBank _bank;
     private readonly ActiveSaveSwitcher _switcher;
     private readonly string _activeSavePath;
+    private readonly ICampaignMetadataExtractor _metadataExtractor;
 
-    public Sts2ActiveSaveSync(MultiplayerSaveBank bank, ActiveSaveSwitcher switcher, string activeSavePath)
+    public Sts2ActiveSaveSync(
+        MultiplayerSaveBank bank,
+        ActiveSaveSwitcher switcher,
+        string activeSavePath,
+        ICampaignMetadataExtractor? metadataExtractor = null)
     {
         _bank = bank;
         _switcher = switcher;
         _activeSavePath = activeSavePath;
+        _metadataExtractor = metadataExtractor ?? new EmptyCampaignMetadataExtractor();
     }
 
     public OperationResult SyncBack(DateTimeOffset nowUtc)
     {
         try
         {
-            _switcher.SyncBack(nowUtc);
+            var metadata = CaptureMetadataOrEmpty();
+            _switcher.SyncBack(nowUtc, metadata.ActOrFloor);
             return OperationResult.Ok();
         }
         catch (Exception ex)
@@ -53,20 +60,39 @@ public sealed class Sts2ActiveSaveSync : IActiveSaveSync
         }
     }
 
-    public OperationResult<string> FinalizePendingNewRun(MultiplayerGameMode gameMode, DateTimeOffset nowUtc)
+    public OperationResult<string> FinalizePendingNewRun(
+        MultiplayerGameMode gameMode,
+        CampaignMetadataSnapshot metadata,
+        DateTimeOffset nowUtc)
     {
         try
         {
             if (!File.Exists(_activeSavePath))
                 return OperationResult<string>.Fail("Active multiplayer save is missing");
 
-            var metadata = _bank.CreateCampaign(new CampaignCreateRequest(gameMode, [], _activeSavePath, nowUtc));
-            _switcher.ClaimActiveSave(metadata.CampaignId, nowUtc);
-            return OperationResult<string>.Ok(metadata.CampaignId);
+            var activeMetadata = CaptureMetadataOrEmpty();
+            var roster = metadata.Roster.Count > 0 ? metadata.Roster : activeMetadata.Roster;
+            var actOrFloor = activeMetadata.ActOrFloor ?? metadata.ActOrFloor;
+            var created = _bank.CreateCampaign(new CampaignCreateRequest(gameMode, roster, _activeSavePath, nowUtc, actOrFloor));
+            _switcher.ClaimActiveSave(created.CampaignId, nowUtc);
+            return OperationResult<string>.Ok(created.CampaignId);
         }
         catch (Exception ex)
         {
             return OperationResult<string>.Fail(ex.Message);
+        }
+    }
+
+    private CampaignMetadataSnapshot CaptureMetadataOrEmpty()
+    {
+        try
+        {
+            return _metadataExtractor.CaptureActiveSaveMetadata();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[MultiplayerSaveSlots] Failed to capture active save metadata: {ex.Message}");
+            return CampaignMetadataSnapshot.Empty;
         }
     }
 }
@@ -90,7 +116,12 @@ public static class Sts2HostFlowRuntime
             new ActiveSaveReplacementGuard(paths.ActiveSavePath, paths.ActiveStatePath),
             new DelegateActiveSaveActivator(switcher.Activate, switcher.RestorePreviousActive),
             new Sts2HostFlowContinuation(hostSubmenu),
-            new ActiveSaveRecoveryService(bank, switcher, paths.ActiveSavePath, paths.ActiveStatePath),
+            new ActiveSaveRecoveryService(
+                bank,
+                switcher,
+                paths.ActiveSavePath,
+                paths.ActiveStatePath,
+                new Sts2CampaignMetadataExtractor()),
             Session,
             new SystemClock());
     }
@@ -101,7 +132,7 @@ public static class Sts2HostFlowRuntime
         var bank = new MultiplayerSaveBank(new SaveBankPaths(paths.BankRootDirectory));
         var switcher = new ActiveSaveSwitcher(bank, paths.ActiveSavePath, paths.ActiveStatePath);
         return new SaveSyncController(
-            new Sts2ActiveSaveSync(bank, switcher, paths.ActiveSavePath),
+            new Sts2ActiveSaveSync(bank, switcher, paths.ActiveSavePath, new Sts2CampaignMetadataExtractor()),
             Session,
             new SystemClock());
     }

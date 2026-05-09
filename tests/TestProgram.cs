@@ -17,6 +17,7 @@ AppDomain.CurrentDomain.AssemblyResolve += (_, args) =>
 
 var tests = new List<TestCase>();
 CampaignLabelerTests.Register(tests);
+RunProgressLabelerTests.Register(tests);
 MultiplayerSaveBankTests.Register(tests);
 ActiveSaveSwitcherTests.Register(tests);
 StorageUtilityTests.Register(tests);

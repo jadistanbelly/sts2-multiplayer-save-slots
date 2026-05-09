@@ -13,6 +13,7 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session tracks pending new run", SessionTracksPendingNewRun);
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
+        yield return new TestCase("picker subtitle omits unknown progress", PickerSubtitleOmitsUnknownProgress);
         yield return new TestCase("controller starts new run through continuation", ControllerStartsNewRunThroughContinuation);
         yield return new TestCase("controller does not start new run when active preflight fails", ControllerStopsStartNewWhenPreflightFails);
         yield return new TestCase("controller does not select session when start new continuation fails", ControllerStopsSessionSelectionWhenStartNewFails);
@@ -27,6 +28,7 @@ public static class HostFlowControllerTests
         yield return new TestCase("save sync no-ops without selected campaign", SaveSyncNoOpsWithoutSelection);
         yield return new TestCase("save sync syncs existing selected campaign", SaveSyncSyncsExistingSelection);
         yield return new TestCase("save sync finalizes pending new run", SaveSyncFinalizesPendingNewRun);
+        yield return new TestCase("save sync finalizes pending new run with metadata", SaveSyncFinalizesPendingNewRunWithMetadata);
         yield return new TestCase("save sync keeps pending new run selected when finalization fails", SaveSyncKeepsPendingNewRunWhenFinalizationFails);
         yield return new TestCase("save sync maps sync exceptions to failed result", SaveSyncMapsExceptions);
         yield return new TestCase("controller exposes recovery model", ControllerExposesRecoveryModel);
@@ -118,6 +120,28 @@ public static class HostFlowControllerTests
         AssertEx.Equal(PickerRowKind.Campaign, model.Rows[1].Kind);
         AssertEx.Equal("buddy1 + buddy2", model.Rows[1].Title);
         AssertEx.Equal("Floor 7 - 2 players", model.Rows[1].Subtitle);
+    }
+
+    private static void PickerSubtitleOmitsUnknownProgress()
+    {
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard,
+            "buddy1, buddy2 +2",
+            [
+                new PlayerIdentity("1", "buddy1"),
+                new PlayerIdentity("2", "buddy2"),
+                new PlayerIdentity("3", "buddy3"),
+                new PlayerIdentity("4", "buddy4")
+            ],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T01:00:00Z"),
+            null,
+            "checksum",
+            null));
+
+        AssertEx.Equal("buddy1, buddy2 +2", row.Title);
+        AssertEx.Equal("4 players", row.Subtitle);
     }
 
     private static void ControllerStartsNewRunThroughContinuation()
@@ -325,6 +349,24 @@ public static class HostFlowControllerTests
         AssertEx.Equal("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", session.SelectedCampaignId);
         AssertEx.Equal(MultiplayerGameMode.Custom, session.SelectedGameMode);
         AssertEx.False(session.IsPendingNewRun);
+    }
+
+    private static void SaveSyncFinalizesPendingNewRunWithMetadata()
+    {
+        var sync = new FakeActiveSaveSync { FinalizedCampaignId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" };
+        var session = new HostFlowSession();
+        session.SelectNewRun(MultiplayerGameMode.Custom);
+        session.CapturePendingNewRunMetadata(new CampaignMetadataSnapshot(
+            [new PlayerIdentity("steam:1", "buddy1")],
+            "Floor 18"));
+        var controller = new SaveSyncController(sync, session, new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")));
+
+        var result = controller.SyncAfterVanillaSave();
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal(1, sync.FinalizeCount);
+        AssertEx.Equal("buddy1", sync.FinalizedMetadata?.Roster[0].DisplayName);
+        AssertEx.Equal("Floor 18", sync.FinalizedMetadata?.ActOrFloor);
     }
 
     private static void SaveSyncKeepsPendingNewRunWhenFinalizationFails()
@@ -581,6 +623,7 @@ public static class HostFlowControllerTests
         public string FinalizedCampaignId { get; init; } = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         public string? FinalizeFailure { get; init; }
         public MultiplayerGameMode? FinalizedGameMode { get; private set; }
+        public CampaignMetadataSnapshot? FinalizedMetadata { get; private set; }
 
         public OperationResult SyncBack(DateTimeOffset nowUtc)
         {
@@ -588,10 +631,14 @@ public static class HostFlowControllerTests
             return OperationResult.Ok();
         }
 
-        public OperationResult<string> FinalizePendingNewRun(MultiplayerGameMode gameMode, DateTimeOffset nowUtc)
+        public OperationResult<string> FinalizePendingNewRun(
+            MultiplayerGameMode gameMode,
+            CampaignMetadataSnapshot metadata,
+            DateTimeOffset nowUtc)
         {
             FinalizeCount++;
             FinalizedGameMode = gameMode;
+            FinalizedMetadata = metadata;
             return FinalizeFailure is null
                 ? OperationResult<string>.Ok(FinalizedCampaignId)
                 : OperationResult<string>.Fail(FinalizeFailure);
@@ -602,7 +649,10 @@ public static class HostFlowControllerTests
     {
         public OperationResult SyncBack(DateTimeOffset nowUtc) => throw new InvalidOperationException("sync exploded");
 
-        public OperationResult<string> FinalizePendingNewRun(MultiplayerGameMode gameMode, DateTimeOffset nowUtc) =>
+        public OperationResult<string> FinalizePendingNewRun(
+            MultiplayerGameMode gameMode,
+            CampaignMetadataSnapshot metadata,
+            DateTimeOffset nowUtc) =>
             throw new InvalidOperationException("finalize exploded");
     }
 }

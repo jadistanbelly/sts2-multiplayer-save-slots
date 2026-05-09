@@ -23,13 +23,15 @@ public sealed record MultiplayerSavePickerRow(
 
     public static MultiplayerSavePickerRow Campaign(CampaignMetadata metadata)
     {
-        var progress = string.IsNullOrWhiteSpace(metadata.ActOrFloor) ? "Unknown progress" : metadata.ActOrFloor;
         var playerLabel = metadata.Roster.Count == 1 ? "1 player" : $"{metadata.Roster.Count} players";
+        var subtitle = string.IsNullOrWhiteSpace(metadata.ActOrFloor)
+            ? playerLabel
+            : $"{metadata.ActOrFloor} - {playerLabel}";
 
         return new MultiplayerSavePickerRow(
             PickerRowKind.Campaign,
             metadata.Label,
-            $"{progress} - {playerLabel}",
+            subtitle,
             metadata.CampaignId);
     }
 }
