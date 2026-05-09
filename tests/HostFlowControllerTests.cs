@@ -17,6 +17,12 @@ public static class HostFlowControllerTests
         yield return new TestCase("picker campaign row includes full details", PickerCampaignRowIncludesFullDetails);
         yield return new TestCase("picker details handle missing progress and roster", PickerDetailsHandleMissingProgressAndRoster);
         yield return new TestCase("picker start new row has no details", PickerStartNewRowHasNoDetails);
+        yield return new TestCase("compatibility checker allows matching stable ids", CompatibilityCheckerAllowsMatchingStableIds);
+        yield return new TestCase("compatibility checker warns for missing expected players", CompatibilityCheckerWarnsForMissingExpectedPlayers);
+        yield return new TestCase("compatibility checker warns for extra current players", CompatibilityCheckerWarnsForExtraCurrentPlayers);
+        yield return new TestCase("compatibility checker skips empty expected roster", CompatibilityCheckerSkipsEmptyExpectedRoster);
+        yield return new TestCase("compatibility checker skips roster without stable ids", CompatibilityCheckerSkipsRosterWithoutStableIds);
+        yield return new TestCase("compatibility checker warning key is stable", CompatibilityCheckerWarningKeyIsStable);
         yield return new TestCase("controller starts new run through continuation", ControllerStartsNewRunThroughContinuation);
         yield return new TestCase("controller does not start new run when active preflight fails", ControllerStopsStartNewWhenPreflightFails);
         yield return new TestCase("controller does not select session when start new continuation fails", ControllerStopsSessionSelectionWhenStartNewFails);
@@ -211,6 +217,94 @@ public static class HostFlowControllerTests
         var row = MultiplayerSavePickerRow.StartNew();
 
         AssertEx.Equal(null, row.Details);
+    }
+
+    private static void CompatibilityCheckerAllowsMatchingStableIds()
+    {
+        var metadata = CampaignWithRoster([
+            new PlayerIdentity("Steam:1", "Alice"),
+            new PlayerIdentity("Steam:2", "Bob")
+        ]);
+
+        var warning = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:2", "Bob"),
+            new PlayerIdentity("Steam:1", "Alice")
+        ]);
+
+        AssertEx.Equal(null, warning);
+    }
+
+    private static void CompatibilityCheckerWarnsForMissingExpectedPlayers()
+    {
+        var metadata = CampaignWithRoster([
+            new PlayerIdentity("Steam:1", "Alice"),
+            new PlayerIdentity("Steam:2", "Bob")
+        ]);
+
+        var warning = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:1", "Alice")
+        ]) ?? throw new InvalidOperationException("Expected compatibility warning");
+
+        AssertEx.True(warning.Message.Contains("Missing original players: Bob", StringComparison.Ordinal));
+        AssertEx.False(warning.Message.Contains("Extra current players:", StringComparison.Ordinal));
+    }
+
+    private static void CompatibilityCheckerWarnsForExtraCurrentPlayers()
+    {
+        var metadata = CampaignWithRoster([
+            new PlayerIdentity("Steam:1", "Alice")
+        ]);
+
+        var warning = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:1", "Alice"),
+            new PlayerIdentity("Steam:3", "Casey")
+        ]) ?? throw new InvalidOperationException("Expected compatibility warning");
+
+        AssertEx.True(warning.Message.Contains("Extra current players: Casey", StringComparison.Ordinal));
+        AssertEx.False(warning.Message.Contains("Missing original players:", StringComparison.Ordinal));
+    }
+
+    private static void CompatibilityCheckerSkipsEmptyExpectedRoster()
+    {
+        var metadata = CampaignWithRoster([]);
+
+        var warning = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:1", "Alice")
+        ]);
+
+        AssertEx.Equal(null, warning);
+    }
+
+    private static void CompatibilityCheckerSkipsRosterWithoutStableIds()
+    {
+        var metadata = CampaignWithRoster([
+            new PlayerIdentity(null, "Alice")
+        ]);
+
+        var warning = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:1", "Alice")
+        ]);
+
+        AssertEx.Equal(null, warning);
+    }
+
+    private static void CompatibilityCheckerWarningKeyIsStable()
+    {
+        var metadata = CampaignWithRoster([
+            new PlayerIdentity("Steam:1", "Alice"),
+            new PlayerIdentity("Steam:2", "Bob")
+        ]);
+
+        var first = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:1", "Alice"),
+            new PlayerIdentity("Steam:3", "Casey")
+        ]) ?? throw new InvalidOperationException("Expected first compatibility warning");
+        var second = CampaignCompatibilityChecker.BuildWarning(metadata, [
+            new PlayerIdentity("Steam:3", "Casey"),
+            new PlayerIdentity("Steam:1", "Alice")
+        ]) ?? throw new InvalidOperationException("Expected second compatibility warning");
+
+        AssertEx.Equal(first.WarningKey, second.WarningKey);
     }
 
     private static void ControllerStartsNewRunThroughContinuation()
@@ -600,6 +694,18 @@ public static class HostFlowControllerTests
             new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")),
             metadataRepair ?? new FakeActivatedCampaignMetadataRepair());
     }
+
+    private static CampaignMetadata CampaignWithRoster(IReadOnlyList<PlayerIdentity> roster) =>
+        new(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard,
+            CampaignLabeler.Build(roster),
+            roster,
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T01:00:00Z"),
+            null,
+            "checksum",
+            "Floor 7");
 
     private sealed class FixedClock(DateTimeOffset utcNow) : IClock
     {
