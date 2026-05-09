@@ -1,6 +1,7 @@
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Modding;
+using MultiplayerSaveSlots.Patches;
 
 namespace MultiplayerSaveSlots;
 
@@ -13,6 +14,7 @@ public static class MultiplayerSaveSlotsMod
     {
         Harmony = new Harmony("com.jadistanbelly.multiplayersaveslots");
         Harmony.PatchAll(typeof(MultiplayerSaveSlotsMod).Assembly);
+        RemoveMultiplayerPlayerLimitCompatibilityPatch.Apply(Harmony);
         GD.Print("[MultiplayerSaveSlots] Initialized");
     }
 }

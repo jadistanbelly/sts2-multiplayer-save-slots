@@ -18,6 +18,10 @@ public static class HostFlowPatchTests
         yield return new TestCase("save manager patch propagates vanilla task failure", SaveManagerPatchPropagatesVanillaFailure);
         yield return new TestCase("recovery modal exposes show method", RecoveryModalExposesShowMethod);
         yield return new TestCase("picker modal builds details body text", PickerModalBuildsDetailsBodyText);
+        yield return new TestCase("picker modal exposes explicit UI builder", PickerModalExposesExplicitUiBuilder);
+        yield return new TestCase("recovery modal exposes explicit UI builder", RecoveryModalExposesExplicitUiBuilder);
+        yield return new TestCase("RMP host compatibility opens picker before direct host", RmpHostCompatibilityOpensPickerBeforeDirectHost);
+        yield return new TestCase("RMP host compatibility resumes original host handler", RmpHostCompatibilityResumesOriginalHostHandler);
         yield return new TestCase("load lobby compatibility patch preserves vanilla false", LoadLobbyCompatibilityPatchPreservesVanillaFalse);
         yield return new TestCase("load lobby compatibility patch applies guard after vanilla true", LoadLobbyCompatibilityPatchAppliesGuardAfterVanillaTrue);
         yield return new TestCase("load lobby compatibility patch exposes postfix", LoadLobbyCompatibilityPatchExposesPostfix);
@@ -172,6 +176,81 @@ public static class HostFlowPatchTests
         AssertEx.Equal("Progress: Floor 18\nPlayers: 2\n\nRoster\n1. buddy1\n2. buddy2", body);
     }
 
+    private static void PickerModalExposesExplicitUiBuilder()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var buildUi = modalType!.GetMethod("BuildUi", BindingFlags.Instance | BindingFlags.NonPublic);
+        AssertEx.True(buildUi is not null);
+    }
+
+    private static void RecoveryModalExposesExplicitUiBuilder()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSaveRecoveryModal");
+        AssertEx.True(modalType is not null);
+        var buildUi = modalType!.GetMethod("BuildUi", BindingFlags.Instance | BindingFlags.NonPublic);
+        AssertEx.True(buildUi is not null);
+    }
+
+    private static void RmpHostCompatibilityOpensPickerBeforeDirectHost()
+    {
+        var (tryOpenPicker, _, _) = GetRmpCompatibilityPatchMembers();
+        var rmpHost = new FakeRmpHostBootstrap();
+        var gameModeType = tryOpenPicker.GetParameters()[3].ParameterType;
+        var shownGameModes = new List<MultiplayerGameMode>();
+
+        var result = tryOpenPicker.Invoke(null, new object[]
+        {
+            rmpHost,
+            rmpHost.Handler,
+            null!,
+            Enum.Parse(gameModeType, "Standard"),
+            (Func<HostFlowController>)(() => null!),
+            (Action<HostFlowController, MultiplayerGameMode>)((_, mode) => shownGameModes.Add(mode))
+        });
+
+        AssertEx.Equal(false, result);
+        AssertEx.Equal(1, shownGameModes.Count);
+        AssertEx.Equal(MultiplayerGameMode.Standard, shownGameModes[0]);
+        AssertEx.Equal(0, rmpHost.Calls);
+    }
+
+    private static void RmpHostCompatibilityResumesOriginalHostHandler()
+    {
+        var (tryOpenPicker, resumingField, _) = GetRmpCompatibilityPatchMembers();
+        var rmpHost = new FakeRmpHostBootstrap();
+        var gameModeType = tryOpenPicker.GetParameters()[3].ParameterType;
+        var gameMode = Enum.Parse(gameModeType, "Standard");
+        var continuationProperty = typeof(Sts2HostFlowRuntime).GetProperty("VanillaStartContinuation")
+            ?? throw new InvalidOperationException("VanillaStartContinuation property was not found");
+        var previousContinuation = continuationProperty.GetValue(null);
+
+        try
+        {
+            tryOpenPicker.Invoke(null, new object[]
+            {
+                rmpHost,
+                rmpHost.Handler,
+                null!,
+                gameMode,
+                (Func<HostFlowController>)(() => null!),
+                (Action<HostFlowController, MultiplayerGameMode>)((_, _) => { })
+            });
+
+            var resume = typeof(Sts2HostFlowRuntime).GetMethod("ResumeVanillaStart")
+                ?? throw new InvalidOperationException("ResumeVanillaStart method was not found");
+            resume.Invoke(null, [null, gameMode]);
+
+            AssertEx.Equal(1, rmpHost.Calls);
+            AssertEx.Equal(gameMode, rmpHost.LastGameMode);
+            AssertEx.Equal(false, resumingField.GetValue(null));
+        }
+        finally
+        {
+            continuationProperty.SetValue(null, previousContinuation);
+        }
+    }
+
     private static void LoadLobbyCompatibilityPatchPreservesVanillaFalse()
     {
         var guardCalls = 0;
@@ -224,6 +303,18 @@ public static class HostFlowPatchTests
         return (resumingField, prefix, patchType);
     }
 
+    private static (MethodInfo TryOpenPicker, FieldInfo ResumingField, Type PatchType) GetRmpCompatibilityPatchMembers()
+    {
+        var patchType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.Patches.RemoveMultiplayerPlayerLimitCompatibilityPatch")
+            ?? throw new InvalidOperationException("RMP compatibility patch type was not found");
+        var tryOpenPicker = patchType.GetMethod("TryOpenPickerBeforeRmpHost", BindingFlags.Static | BindingFlags.Public)
+            ?? throw new InvalidOperationException("RMP compatibility picker helper was not found");
+        var resumingField = patchType.GetField("_resumingRmpHost", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("RMP compatibility resume guard was not found");
+
+        return (tryOpenPicker, resumingField, patchType);
+    }
+
     private sealed class FakeSaveSyncController : ISaveSyncRunner
     {
         private readonly Func<OperationResult> _sync;
@@ -234,5 +325,22 @@ public static class HostFlowPatchTests
         }
 
         public OperationResult SyncAfterVanillaSave() => _sync();
+    }
+
+    private sealed class FakeRmpHostBootstrap
+    {
+        public int Calls { get; private set; }
+
+        public object? LastGameMode { get; private set; }
+
+        public MethodInfo Handler =>
+            GetType().GetMethod(nameof(OnHostSubmenuPressed), BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Fake RMP handler was not found");
+
+        private void OnHostSubmenuPressed(object? submenu, object gameMode)
+        {
+            Calls++;
+            LastGameMode = gameMode;
+        }
     }
 }

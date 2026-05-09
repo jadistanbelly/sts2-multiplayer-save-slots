@@ -12,6 +12,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     private readonly MultiplayerSavePickerModel _model;
     private Control? _defaultFocusedControl;
     private Control? _detailsOverlay;
+    private bool _built;
 
     private MultiplayerSavePickerModal(HostFlowController controller, MultiplayerSavePickerModel model)
     {
@@ -27,44 +28,54 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         var model = controller.BuildPickerModel(gameMode);
         var container = NModalContainer.Instance
             ?? throw new InvalidOperationException("Modal container is not available.");
-        container.Add(new MultiplayerSavePickerModal(controller, model));
+        var modal = new MultiplayerSavePickerModal(controller, model);
+        modal.BuildUi();
+        container.Clear();
+        GD.Print($"[MultiplayerSaveSlots] Opening save picker for {gameMode} with {model.Rows.Count} rows.");
+        container.Add(modal);
     }
 
-    public override void _Ready()
-    {
-        AnchorLeft = 0;
-        AnchorTop = 0;
-        AnchorRight = 1;
-        AnchorBottom = 1;
+    public override void _Ready() => BuildUi();
 
-        var panel = new PanelContainer
-        {
-            CustomMinimumSize = new Vector2(720, 520)
-        };
-        panel.SetAnchorsPreset(LayoutPreset.Center);
-        panel.OffsetLeft = -360;
-        panel.OffsetTop = -260;
-        panel.OffsetRight = 360;
-        panel.OffsetBottom = 260;
+    private void BuildUi()
+    {
+        if (_built)
+            return;
+
+        _built = true;
+        ModalUiStyling.PrepareModalRoot(this);
+
+        var panel = ModalUiStyling.CreatePanel(new Vector2(760, 560), 380, 280);
         AddChild(panel);
 
-        var root = new VBoxContainer();
+        var root = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
         root.AddThemeConstantOverride("separation", 12);
         panel.AddChild(root);
 
-        root.AddChild(new Label
+        var title = new Label
         {
             Text = $"Multiplayer Saves - {_model.GameMode}",
             HorizontalAlignment = HorizontalAlignment.Center
-        });
+        };
+        ModalUiStyling.StyleTitle(title);
+        root.AddChild(title);
 
         var scroll = new ScrollContainer
         {
+            CustomMinimumSize = new Vector2(680, 340),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
         root.AddChild(scroll);
 
-        var rows = new VBoxContainer();
+        var rows = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         rows.AddThemeConstantOverride("separation", 8);
         scroll.AddChild(rows);
 
@@ -74,6 +85,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         }
 
         var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(180, 44) };
+        ModalUiStyling.StyleButton(cancel);
         cancel.Pressed += Close;
         root.AddChild(cancel);
         _defaultFocusedControl ??= cancel;
@@ -104,6 +116,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             CustomMinimumSize = new Vector2(104, 56),
             AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
+        ModalUiStyling.StyleButton(details);
         details.Pressed += () => ShowDetails(row.Details);
         rowContainer.AddChild(details);
     }
@@ -116,6 +129,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             CustomMinimumSize = minimumSize,
             AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
+        ModalUiStyling.StyleButton(button);
         button.Pressed += () => SelectRow(row);
         return button;
     }
@@ -133,48 +147,52 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         AddChild(overlay);
         _detailsOverlay = overlay;
 
-        var panel = new PanelContainer
-        {
-            CustomMinimumSize = new Vector2(640, 460)
-        };
-        panel.SetAnchorsPreset(LayoutPreset.Center);
-        panel.OffsetLeft = -320;
-        panel.OffsetTop = -230;
-        panel.OffsetRight = 320;
-        panel.OffsetBottom = 230;
+        var panel = ModalUiStyling.CreatePanel(new Vector2(660, 480), 330, 240);
         overlay.AddChild(panel);
 
-        var root = new VBoxContainer();
+        var root = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
         root.AddThemeConstantOverride("separation", 12);
         panel.AddChild(root);
 
-        root.AddChild(new Label
+        var title = new Label
         {
             Text = details.Title,
             HorizontalAlignment = HorizontalAlignment.Center,
             AutowrapMode = TextServer.AutowrapMode.WordSmart
-        });
+        };
+        ModalUiStyling.StyleTitle(title);
+        root.AddChild(title);
 
-        root.AddChild(new Label
+        var subtitle = new Label
         {
             Text = details.Subtitle,
             HorizontalAlignment = HorizontalAlignment.Center,
             AutowrapMode = TextServer.AutowrapMode.WordSmart
-        });
+        };
+        ModalUiStyling.StyleBody(subtitle);
+        root.AddChild(subtitle);
 
         var scroll = new ScrollContainer
         {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
         root.AddChild(scroll);
 
-        scroll.AddChild(new Label
+        var body = new Label
         {
             Text = BuildDetailsBody(details),
             AutowrapMode = TextServer.AutowrapMode.WordSmart
-        });
+        };
+        ModalUiStyling.StyleBody(body, 20);
+        scroll.AddChild(body);
 
         var close = new Button { Text = "Close", CustomMinimumSize = new Vector2(180, 44) };
+        ModalUiStyling.StyleButton(close);
         close.Pressed += CloseDetails;
         root.AddChild(close);
     }

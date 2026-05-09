@@ -13,6 +13,7 @@ public sealed partial class MultiplayerSaveRecoveryModal : Control, IScreenConte
     private readonly MultiplayerSavePickerRow _row;
     private readonly ActiveSaveRecoveryModel _model;
     private Control? _defaultFocusedControl;
+    private bool _built;
 
     private MultiplayerSaveRecoveryModal(
         HostFlowController controller,
@@ -39,44 +40,49 @@ public sealed partial class MultiplayerSaveRecoveryModal : Control, IScreenConte
         if (container is null)
             return;
 
+        var modal = new MultiplayerSaveRecoveryModal(controller, gameMode, row, model);
+        modal.BuildUi();
         container.Clear();
-        container.Add(new MultiplayerSaveRecoveryModal(controller, gameMode, row, model));
+        container.Add(modal);
     }
 
-    public override void _Ready()
-    {
-        AnchorLeft = 0;
-        AnchorTop = 0;
-        AnchorRight = 1;
-        AnchorBottom = 1;
+    public override void _Ready() => BuildUi();
 
-        var panel = new PanelContainer
-        {
-            CustomMinimumSize = new Vector2(720, 420)
-        };
-        panel.SetAnchorsPreset(LayoutPreset.Center);
-        panel.OffsetLeft = -360;
-        panel.OffsetTop = -210;
-        panel.OffsetRight = 360;
-        panel.OffsetBottom = 210;
+    private void BuildUi()
+    {
+        if (_built)
+            return;
+
+        _built = true;
+        ModalUiStyling.PrepareModalRoot(this);
+
+        var panel = ModalUiStyling.CreatePanel(new Vector2(760, 460), 380, 230);
         AddChild(panel);
 
-        var root = new VBoxContainer();
+        var root = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
         root.AddThemeConstantOverride("separation", 12);
         panel.AddChild(root);
 
-        root.AddChild(new Label
+        var title = new Label
         {
             Text = _model.Title,
             HorizontalAlignment = HorizontalAlignment.Center,
             AutowrapMode = TextServer.AutowrapMode.WordSmart
-        });
+        };
+        ModalUiStyling.StyleTitle(title);
+        root.AddChild(title);
 
-        root.AddChild(new Label
+        var message = new Label
         {
             Text = _model.Message,
             AutowrapMode = TextServer.AutowrapMode.WordSmart
-        });
+        };
+        ModalUiStyling.StyleBody(message);
+        root.AddChild(message);
 
         foreach (var option in _model.Options)
         {
@@ -86,12 +92,14 @@ public sealed partial class MultiplayerSaveRecoveryModal : Control, IScreenConte
                 CustomMinimumSize = new Vector2(640, 64),
                 AutowrapMode = TextServer.AutowrapMode.WordSmart
             };
+            ModalUiStyling.StyleButton(button);
             button.Pressed += () => SelectOption(option);
             root.AddChild(button);
             _defaultFocusedControl ??= button;
         }
 
         var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(180, 44) };
+        ModalUiStyling.StyleButton(cancel);
         cancel.Pressed += Close;
         root.AddChild(cancel);
         _defaultFocusedControl ??= cancel;
