@@ -21,6 +21,8 @@ public static class HostFlowControllerTests
         yield return new TestCase("controller does not start new run when active preflight fails", ControllerStopsStartNewWhenPreflightFails);
         yield return new TestCase("controller does not select session when start new continuation fails", ControllerStopsSessionSelectionWhenStartNewFails);
         yield return new TestCase("controller activates existing campaign before load continuation", ControllerActivatesExistingCampaign);
+        yield return new TestCase("controller repairs metadata after existing campaign activation", ControllerRepairsMetadataAfterExistingCampaignActivation);
+        yield return new TestCase("controller continues existing campaign when metadata repair fails", ControllerContinuesExistingCampaignWhenMetadataRepairFails);
         yield return new TestCase("controller does not activate existing campaign when active preflight fails", ControllerStopsExistingCampaignWhenActivePreflightFails);
         yield return new TestCase("controller does not activate existing campaign when load preflight fails", ControllerStopsExistingCampaignWhenLoadPreflightFails);
         yield return new TestCase("controller does not continue when activation fails", ControllerStopsWhenActivationFails);
@@ -239,6 +241,43 @@ public static class HostFlowControllerTests
         AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", activator.ActivatedCampaignId);
         AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", session.SelectedCampaignId);
         AssertEx.Equal(0, continuation.StartNewRunCount);
+        AssertEx.Equal(1, continuation.LoadExistingCount);
+    }
+
+    private static void ControllerRepairsMetadataAfterExistingCampaignActivation()
+    {
+        var activator = new FakeActiveSaveActivator();
+        var continuation = new FakeHostFlowContinuation();
+        var repair = new FakeActivatedCampaignMetadataRepair();
+        var controller = CreateController(
+            new FakeHostFlowSaveBank(),
+            activator,
+            continuation,
+            metadataRepair: repair);
+
+        var result = controller.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", repair.RepairedCampaignId);
+        AssertEx.Equal(DateTimeOffset.Parse("2026-05-08T12:00:00Z"), repair.RepairedAtUtc);
+        AssertEx.Equal(1, continuation.LoadExistingCount);
+    }
+
+    private static void ControllerContinuesExistingCampaignWhenMetadataRepairFails()
+    {
+        var activator = new FakeActiveSaveActivator();
+        var continuation = new FakeHostFlowContinuation();
+        var repair = new FakeActivatedCampaignMetadataRepair { ThrowOnRepair = true };
+        var controller = CreateController(
+            new FakeHostFlowSaveBank(),
+            activator,
+            continuation,
+            metadataRepair: repair);
+
+        var result = controller.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal(1, repair.RepairCount);
         AssertEx.Equal(1, continuation.LoadExistingCount);
     }
 
@@ -548,7 +587,8 @@ public static class HostFlowControllerTests
         FakeHostFlowContinuation? continuation = null,
         HostFlowSession? session = null,
         FakeActiveSavePreflight? preflight = null,
-        FakeActiveSaveRecovery? recovery = null)
+        FakeActiveSaveRecovery? recovery = null,
+        FakeActivatedCampaignMetadataRepair? metadataRepair = null)
     {
         return new HostFlowController(
             bank ?? new FakeHostFlowSaveBank(),
@@ -557,7 +597,8 @@ public static class HostFlowControllerTests
             continuation ?? new FakeHostFlowContinuation(),
             recovery ?? new FakeActiveSaveRecovery(),
             session ?? new HostFlowSession(),
-            new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")));
+            new FixedClock(DateTimeOffset.Parse("2026-05-08T12:00:00Z")),
+            metadataRepair ?? new FakeActivatedCampaignMetadataRepair());
     }
 
     private sealed class FixedClock(DateTimeOffset utcNow) : IClock
@@ -648,6 +689,23 @@ public static class HostFlowControllerTests
             return Failure is not null && _calls <= FailuresBeforeSuccess
                 ? OperationResult.Fail(Failure)
                 : OperationResult.Ok();
+        }
+    }
+
+    private sealed class FakeActivatedCampaignMetadataRepair : IActivatedCampaignMetadataRepair
+    {
+        public string? RepairedCampaignId { get; private set; }
+        public DateTimeOffset? RepairedAtUtc { get; private set; }
+        public bool ThrowOnRepair { get; init; }
+        public int RepairCount { get; private set; }
+
+        public void RepairActivatedCampaign(string campaignId, DateTimeOffset nowUtc)
+        {
+            RepairCount++;
+            RepairedCampaignId = campaignId;
+            RepairedAtUtc = nowUtc;
+            if (ThrowOnRepair)
+                throw new InvalidOperationException("repair failed");
         }
     }
 
