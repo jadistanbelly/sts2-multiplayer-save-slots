@@ -13,6 +13,7 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session tracks pending new run", SessionTracksPendingNewRun);
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
+        yield return new TestCase("picker subtitle omits unknown progress", PickerSubtitleOmitsUnknownProgress);
         yield return new TestCase("controller starts new run through continuation", ControllerStartsNewRunThroughContinuation);
         yield return new TestCase("controller does not start new run when active preflight fails", ControllerStopsStartNewWhenPreflightFails);
         yield return new TestCase("controller does not select session when start new continuation fails", ControllerStopsSessionSelectionWhenStartNewFails);
@@ -118,6 +119,28 @@ public static class HostFlowControllerTests
         AssertEx.Equal(PickerRowKind.Campaign, model.Rows[1].Kind);
         AssertEx.Equal("buddy1 + buddy2", model.Rows[1].Title);
         AssertEx.Equal("Floor 7 - 2 players", model.Rows[1].Subtitle);
+    }
+
+    private static void PickerSubtitleOmitsUnknownProgress()
+    {
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard,
+            "buddy1, buddy2 +2",
+            [
+                new PlayerIdentity("1", "buddy1"),
+                new PlayerIdentity("2", "buddy2"),
+                new PlayerIdentity("3", "buddy3"),
+                new PlayerIdentity("4", "buddy4")
+            ],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T01:00:00Z"),
+            null,
+            "checksum",
+            null));
+
+        AssertEx.Equal("buddy1, buddy2 +2", row.Title);
+        AssertEx.Equal("4 players", row.Subtitle);
     }
 
     private static void ControllerStartsNewRunThroughContinuation()
