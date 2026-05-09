@@ -44,6 +44,9 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("recovery syncs active save to selected campaign", RecoverySyncsActiveSaveToSelectedCampaign));
         tests.Add(new TestCase("sync-back refreshes progress metadata", SyncBackRefreshesProgressMetadata));
         tests.Add(new TestCase("active save sync finalizes pending new run when metadata extractor fails", ActiveSaveSyncFinalizesPendingNewRunWhenMetadataExtractorFails));
+        tests.Add(new TestCase("metadata repair updates empty roster and progress", MetadataRepairUpdatesEmptyRosterAndProgress));
+        tests.Add(new TestCase("metadata repair preserves existing roster", MetadataRepairPreservesExistingRoster));
+        tests.Add(new TestCase("metadata repair ignores extractor failure", MetadataRepairIgnoresExtractorFailure));
     }
 
     private static void ActivatesCampaign()
@@ -777,6 +780,82 @@ public static class ActiveSaveSwitcherTests
         AssertEx.Equal("buddy1", campaigns[0].Label);
         AssertEx.Equal("Floor 3", campaigns[0].ActOrFloor);
         AssertEx.Equal(campaigns[0].CampaignId, JsonFile.Read<ActiveSaveState>(state).CampaignId);
+    }
+
+    private static void MetadataRepairUpdatesEmptyRosterAndProgress()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        File.WriteAllText(source, "campaign");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            source,
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z")));
+        var repair = new ActivatedCampaignMetadataRepair(
+            bank,
+            new FakeCampaignMetadataExtractor(new CampaignMetadataSnapshot(
+                [new PlayerIdentity("steam:1", "buddy1"), new PlayerIdentity("steam:2", "buddy2")],
+                "Floor 12")));
+
+        repair.RepairActivatedCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-08T12:00:00Z"));
+
+        var updated = bank.GetCampaign(metadata.CampaignId);
+        AssertEx.Equal("buddy1, buddy2", updated.Label);
+        AssertEx.Equal(2, updated.Roster.Count);
+        AssertEx.Equal("buddy1", updated.Roster[0].DisplayName);
+        AssertEx.Equal("buddy2", updated.Roster[1].DisplayName);
+        AssertEx.Equal("Floor 12", updated.ActOrFloor);
+        AssertEx.Equal("campaign", File.ReadAllText(bank.GetPayloadPath(metadata.CampaignId)));
+    }
+
+    private static void MetadataRepairPreservesExistingRoster()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        File.WriteAllText(source, "campaign");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [new PlayerIdentity("steam:existing", "existingBuddy")],
+            source,
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z")));
+        var repair = new ActivatedCampaignMetadataRepair(
+            bank,
+            new FakeCampaignMetadataExtractor(new CampaignMetadataSnapshot(
+                [new PlayerIdentity("steam:new", "newBuddy")],
+                "Floor 9")));
+
+        repair.RepairActivatedCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-08T12:00:00Z"));
+
+        var updated = bank.GetCampaign(metadata.CampaignId);
+        AssertEx.Equal("existingBuddy", updated.Label);
+        AssertEx.Equal(1, updated.Roster.Count);
+        AssertEx.Equal("steam:existing", updated.Roster[0].StableId);
+        AssertEx.Equal("Floor 9", updated.ActOrFloor);
+    }
+
+    private static void MetadataRepairIgnoresExtractorFailure()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        File.WriteAllText(source, "campaign");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            source,
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z")));
+        var repair = new ActivatedCampaignMetadataRepair(bank, new ThrowingCampaignMetadataExtractor());
+
+        repair.RepairActivatedCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-08T12:00:00Z"));
+
+        var updated = bank.GetCampaign(metadata.CampaignId);
+        AssertEx.Equal("Unknown party", updated.Label);
+        AssertEx.Equal(0, updated.Roster.Count);
+        AssertEx.Equal(null, updated.ActOrFloor);
+        AssertEx.Equal("campaign", File.ReadAllText(bank.GetPayloadPath(metadata.CampaignId)));
     }
 
     private static string SingleFile(string directory)

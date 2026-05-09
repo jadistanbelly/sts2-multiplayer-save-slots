@@ -13,6 +13,11 @@ public interface IActiveSaveActivator
     OperationResult RestorePreviousActive(DateTimeOffset nowUtc);
 }
 
+public interface IActivatedCampaignMetadataRepair
+{
+    void RepairActivatedCampaign(string campaignId, DateTimeOffset nowUtc);
+}
+
 public interface IActiveSavePreflight
 {
     OperationResult EnsureActiveSaveCanBeReplaced();
@@ -71,5 +76,12 @@ public sealed class DelegateActiveSaveActivator : IActiveSaveActivator
         {
             return OperationResult.Fail(ex.Message);
         }
+    }
+}
+
+public sealed class NoOpActivatedCampaignMetadataRepair : IActivatedCampaignMetadataRepair
+{
+    public void RepairActivatedCampaign(string campaignId, DateTimeOffset nowUtc)
+    {
     }
 }
