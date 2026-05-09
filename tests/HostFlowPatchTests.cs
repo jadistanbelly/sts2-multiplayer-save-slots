@@ -13,9 +13,10 @@ public static class HostFlowPatchTests
         yield return new TestCase("game mode map handles standard daily and custom", GameModeMapHandlesAllModes);
         yield return new TestCase("host submenu prefix allows vanilla while resuming", HostSubmenuPrefixAllowsVanillaWhileResuming);
         yield return new TestCase("host submenu prefix blocks vanilla when picker setup fails", HostSubmenuPrefixBlocksVanillaWhenPickerSetupFails);
-        yield return new TestCase("save manager patch runs sync after vanilla task completes", SaveManagerPatchRunsSyncAfterVanillaTask);
-        yield return new TestCase("save manager patch logs sync failure without failing vanilla save", SaveManagerPatchLogsSyncFailure);
-        yield return new TestCase("save manager patch propagates vanilla task failure", SaveManagerPatchPropagatesVanillaFailure);
+        yield return new TestCase("run save manager patch runs sync after vanilla task completes", RunSaveManagerPatchRunsSyncAfterVanillaTask);
+        yield return new TestCase("run save manager patch logs sync failure without failing vanilla save", RunSaveManagerPatchLogsSyncFailure);
+        yield return new TestCase("run save manager patch propagates vanilla task failure", RunSaveManagerPatchPropagatesVanillaFailure);
+        yield return new TestCase("run save manager patch exposes postfix", RunSaveManagerPatchExposesPostfix);
         yield return new TestCase("recovery modal exposes show method", RecoveryModalExposesShowMethod);
         yield return new TestCase("picker modal builds details body text", PickerModalBuildsDetailsBodyText);
         yield return new TestCase("picker modal exposes explicit UI builder", PickerModalExposesExplicitUiBuilder);
@@ -101,13 +102,13 @@ public static class HostFlowPatchTests
         AssertEx.Equal(false, result);
     }
 
-    private static void SaveManagerPatchRunsSyncAfterVanillaTask()
+    private static void RunSaveManagerPatchRunsSyncAfterVanillaTask()
     {
         var vanilla = Task.CompletedTask;
         var syncCount = 0;
         var logs = new List<string>();
 
-        var wrapped = SaveManagerPatch.AppendSync(
+        var wrapped = RunSaveManagerPatch.AppendSync(
             vanilla,
             () => new FakeSaveSyncController(() =>
             {
@@ -122,11 +123,11 @@ public static class HostFlowPatchTests
         AssertEx.Equal(0, logs.Count);
     }
 
-    private static void SaveManagerPatchLogsSyncFailure()
+    private static void RunSaveManagerPatchLogsSyncFailure()
     {
         var logs = new List<string>();
 
-        var wrapped = SaveManagerPatch.AppendSync(
+        var wrapped = RunSaveManagerPatch.AppendSync(
             Task.CompletedTask,
             () => new FakeSaveSyncController(() => OperationResult.Fail("sync failed")),
             logs.Add);
@@ -137,18 +138,26 @@ public static class HostFlowPatchTests
         AssertEx.Equal("[MultiplayerSaveSlots] Save sync failed: sync failed", logs[0]);
     }
 
-    private static void SaveManagerPatchPropagatesVanillaFailure()
+    private static void RunSaveManagerPatchPropagatesVanillaFailure()
     {
         var logs = new List<string>();
         var vanilla = Task.FromException(new InvalidOperationException("vanilla failed"));
 
-        var wrapped = SaveManagerPatch.AppendSync(
+        var wrapped = RunSaveManagerPatch.AppendSync(
             vanilla,
             () => new FakeSaveSyncController(() => OperationResult.Ok()),
             logs.Add);
 
         AssertEx.Throws<InvalidOperationException>(() => wrapped.GetAwaiter().GetResult());
         AssertEx.Equal(0, logs.Count);
+    }
+
+    private static void RunSaveManagerPatchExposesPostfix()
+    {
+        var patchType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.Patches.RunSaveManagerPatch");
+        AssertEx.True(patchType is not null);
+        var postfix = patchType!.GetMethod("Postfix", BindingFlags.Static | BindingFlags.Public);
+        AssertEx.True(postfix is not null);
     }
 
     private static void RecoveryModalExposesShowMethod()

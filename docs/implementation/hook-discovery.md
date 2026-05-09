@@ -211,9 +211,9 @@ Existing campaign selections activate the campaign payload into `current_run_mp.
 
 ## Phase 3 Hook Selection
 
-Phase 3 uses a postfix on `SaveManager.SaveRun(AbstractRoom?, bool)` and wraps the returned `Task`. This keeps vanilla error handling intact and runs Multiplayer Save Slots sync only after STS2 has completed its save batch.
+Phase 3 uses a postfix on `RunSaveManager.SaveRun(AbstractRoom?)` and wraps the returned `Task`. This keeps vanilla error handling intact and runs Multiplayer Save Slots sync only after STS2 has completed the concrete run-save write.
 
-The lower-level `RunSaveManager.SaveRun(AbstractRoom?)` is the method that writes `current_run_mp.save` and raises `Saved`, but patching the facade gives the mod one point after progress save batching and current-save task serialization.
+The lower-level `RunSaveManager.SaveRun(AbstractRoom?)` is the method that writes `current_run_mp.save` and raises `Saved`. Real RMP host smoke testing showed this lower-level hook is required because the active multiplayer save can be written without the mod observing the `SaveManager.SaveRun(...)` facade.
 
 ## Phase 4 Safety Recovery
 
