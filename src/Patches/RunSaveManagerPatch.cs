@@ -1,11 +1,11 @@
 using HarmonyLib;
-using MegaCrit.Sts2.Core.Saves;
+using MegaCrit.Sts2.Core.Saves.Managers;
 using MultiplayerSaveSlots.Runtime;
 
 namespace MultiplayerSaveSlots.Patches;
 
-[HarmonyPatch(typeof(SaveManager), nameof(SaveManager.SaveRun))]
-public static class SaveManagerPatch
+[HarmonyPatch(typeof(RunSaveManager), nameof(RunSaveManager.SaveRun))]
+public static class RunSaveManagerPatch
 {
     [HarmonyPostfix]
     public static void Postfix(ref Task __result)

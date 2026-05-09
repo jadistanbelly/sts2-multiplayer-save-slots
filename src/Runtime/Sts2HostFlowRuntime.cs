@@ -1,4 +1,5 @@
 using HarmonyLib;
+using Godot;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
@@ -179,7 +180,16 @@ public static class Sts2HostFlowRuntime
         var activePath = RunSaveManager.GetRunSavePath(
             SaveManager.Instance.CurrentProfileId,
             RunSaveManager.multiplayerRunSaveFileName);
-        return MultiplayerSaveRuntimePaths.FromActiveSavePath(activePath);
+        return MultiplayerSaveRuntimePaths.FromSts2ActiveSavePath(
+            activePath,
+            GetFullSaveStorePath,
+            ProjectSettings.GlobalizePath);
+    }
+
+    private static string? GetFullSaveStorePath(string path)
+    {
+        var saveStore = Traverse.Create(SaveManager.Instance).Field("_saveStore").GetValue<ISaveStore>();
+        return saveStore?.GetFullPath(path);
     }
 
     public static void ResumeVanillaStart(NMultiplayerHostSubmenu hostSubmenu, GameMode gameMode) =>

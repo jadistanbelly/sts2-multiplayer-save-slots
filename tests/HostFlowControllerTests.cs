@@ -9,6 +9,7 @@ public static class HostFlowControllerTests
     public static IEnumerable<TestCase> All()
     {
         yield return new TestCase("runtime paths place bank beside active multiplayer save", RuntimePathsPlaceBankBesideActiveSave);
+        yield return new TestCase("runtime paths globalize STS2 user save paths", RuntimePathsGlobalizeSts2UserSavePaths);
         yield return new TestCase("host flow session tracks existing campaign selection", SessionTracksExistingCampaignSelection);
         yield return new TestCase("host flow session tracks pending new run", SessionTracksPendingNewRun);
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
@@ -46,7 +47,8 @@ public static class HostFlowControllerTests
         yield return new TestCase("save sync keeps pending new run selected when finalization fails", SaveSyncKeepsPendingNewRunWhenFinalizationFails);
         yield return new TestCase("save sync maps sync exceptions to failed result", SaveSyncMapsExceptions);
         yield return new TestCase("controller exposes recovery model", ControllerExposesRecoveryModel);
-        yield return new TestCase("controller recovers then starts new run", ControllerRecoversThenStartsNewRun);
+        yield return new TestCase("controller duplicates unmanaged active save without starting new run", ControllerDuplicatesUnmanagedActiveSaveWithoutStartingNewRun);
+        yield return new TestCase("controller syncs managed active save then starts new run", ControllerSyncsManagedActiveSaveThenStartsNewRun);
         yield return new TestCase("controller recovers then selects existing campaign", ControllerRecoversThenSelectsExistingCampaign);
         yield return new TestCase("controller stops when recovery fails", ControllerStopsWhenRecoveryFails);
         yield return new TestCase("recovery model reports unavailable when no options exist", RecoveryModelReportsUnavailableWhenNoOptionsExist);
@@ -62,6 +64,28 @@ public static class HostFlowControllerTests
         AssertEx.Equal(activeSavePath, paths.ActiveSavePath);
         AssertEx.Equal(Path.Combine(saveDirectory, "MultiplayerSaveSlots"), paths.BankRootDirectory);
         AssertEx.Equal(Path.Combine(saveDirectory, "MultiplayerSaveSlots", "active-state.json"), paths.ActiveStatePath);
+    }
+
+    private static void RuntimePathsGlobalizeSts2UserSavePaths()
+    {
+        const string activeSavePath = "profile1/saves/current_run_mp.save";
+        const string storeFullPath = "user://steam/76561198851319384/profile1/saves/current_run_mp.save";
+        var globalizedPath = Path.Combine(
+            Path.GetTempPath(),
+            "SlayTheSpire2",
+            "steam",
+            "76561198851319384",
+            "profile1",
+            "saves",
+            "current_run_mp.save");
+
+        var paths = MultiplayerSaveRuntimePaths.FromSts2ActiveSavePath(
+            activeSavePath,
+            path => path == activeSavePath ? storeFullPath : path,
+            path => path == storeFullPath ? globalizedPath : path);
+
+        AssertEx.Equal(globalizedPath, paths.ActiveSavePath);
+        AssertEx.Equal(Path.Combine(Path.GetDirectoryName(globalizedPath)!, "MultiplayerSaveSlots"), paths.BankRootDirectory);
     }
 
     private static void SessionTracksExistingCampaignSelection()
@@ -687,7 +711,7 @@ public static class HostFlowControllerTests
         AssertEx.Equal(MultiplayerGameMode.Standard, recovery.LastBuildGameMode);
     }
 
-    private static void ControllerRecoversThenStartsNewRun()
+    private static void ControllerDuplicatesUnmanagedActiveSaveWithoutStartingNewRun()
     {
         var recovery = new FakeActiveSaveRecovery();
         var continuation = new FakeHostFlowContinuation();
@@ -702,6 +726,25 @@ public static class HostFlowControllerTests
 
         AssertEx.True(result.Success);
         AssertEx.Equal(ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign, recovery.LastRecoveredAction);
+        AssertEx.Equal(MultiplayerGameMode.Custom, recovery.LastRecoveredGameMode);
+        AssertEx.Equal(0, continuation.StartNewRunCount);
+    }
+
+    private static void ControllerSyncsManagedActiveSaveThenStartsNewRun()
+    {
+        var recovery = new FakeActiveSaveRecovery();
+        var continuation = new FakeHostFlowContinuation();
+        var controller = CreateController(
+            new FakeHostFlowSaveBank(),
+            continuation: continuation,
+            recovery: recovery);
+
+        var result = controller.RecoverAndSelectStartNewRun(
+            ActiveSaveRecoveryActionKind.SyncActiveToCampaign,
+            MultiplayerGameMode.Custom);
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal(ActiveSaveRecoveryActionKind.SyncActiveToCampaign, recovery.LastRecoveredAction);
         AssertEx.Equal(MultiplayerGameMode.Custom, recovery.LastRecoveredGameMode);
         AssertEx.Equal(1, continuation.StartNewRunCount);
     }

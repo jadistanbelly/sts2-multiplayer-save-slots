@@ -67,6 +67,9 @@ public sealed class HostFlowController
         if (!recovery.Success)
             return recovery;
 
+        if (action == ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign)
+            return recovery;
+
         return SelectStartNewRun(gameMode);
     }
 
