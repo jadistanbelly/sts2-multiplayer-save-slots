@@ -18,6 +18,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     private VBoxContainer? _previewRoot;
     private Button? _continueButton;
     private MultiplayerSavePickerRow? _selectedCampaign;
+    private Button? _selectedCampaignButton;
     private bool _built;
 
     private MultiplayerSavePickerModal(HostFlowController controller, MultiplayerSavePickerModel model)
@@ -52,7 +53,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         ModalUiStyling.PrepareModalRoot(this);
         _selectedCampaign = _model.DefaultSelectedCampaign;
 
-        var panel = ModalUiStyling.CreatePanel(new Vector2(980, 620), 490, 310);
+        var panel = ModalUiStyling.CreatePanel(new Vector2(1020, 640), 510, 320);
         AddChild(panel);
 
         var root = new VBoxContainer
@@ -73,15 +74,14 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
         var body = new HBoxContainer
         {
-            CustomMinimumSize = new Vector2(900, 430),
+            CustomMinimumSize = new Vector2(940, 450),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
-        body.AddThemeConstantOverride("separation", 14);
+        body.AddThemeConstantOverride("separation", 16);
         root.AddChild(body);
 
         body.AddChild(BuildCampaignList());
-        body.AddChild(new VSeparator { SizeFlagsVertical = SizeFlags.ExpandFill });
         body.AddChild(BuildPreviewPanel());
 
         var actions = new HBoxContainer
@@ -102,7 +102,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         {
             Text = "Continue",
             Disabled = _selectedCampaign is null,
-            CustomMinimumSize = new Vector2(180, 44)
+            CustomMinimumSize = new Vector2(190, 46)
         };
         ModalUiStyling.StyleButton(_continueButton);
         _continueButton.Pressed += ContinueSelectedCampaign;
@@ -122,7 +122,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
         var startNewRow = _model.Rows.FirstOrDefault(row => row.Kind == PickerRowKind.StartNewRun)
             ?? MultiplayerSavePickerRow.StartNew();
-        var startNew = CreateRowButton(startNewRow, new Vector2(400, 60));
+        var startNew = CreateRowButton(startNewRow, new Vector2(400, 62));
         startNew.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         list.AddChild(startNew);
         _defaultFocusedControl ??= startNew;
@@ -152,7 +152,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         var button = new Button
         {
             Text = string.IsNullOrWhiteSpace(row.Subtitle) ? row.Title : $"{row.Title}\n{row.Subtitle}",
-            CustomMinimumSize = new Vector2(400, 66),
+            CustomMinimumSize = new Vector2(400, 74),
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
@@ -164,20 +164,37 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             _campaignButtons[row.CampaignId] = button;
 
         if (row.CampaignId == _selectedCampaign?.CampaignId)
+        {
             _defaultFocusedControl = button;
+            SetSelectedCampaignButton(button);
+        }
     }
 
     private Control BuildPreviewPanel()
     {
+        var frame = CreatePreviewFrame();
         _previewRoot = new VBoxContainer
         {
-            CustomMinimumSize = new Vector2(440, 430),
+            CustomMinimumSize = new Vector2(460, 430),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
-        _previewRoot.AddThemeConstantOverride("separation", 10);
+        _previewRoot.AddThemeConstantOverride("separation", 9);
+        frame.AddChild(_previewRoot);
         RenderPreview(_selectedCampaign);
-        return _previewRoot;
+        return frame;
+    }
+
+    private static PanelContainer CreatePreviewFrame()
+    {
+        var frame = new PanelContainer
+        {
+            CustomMinimumSize = new Vector2(480, 450),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        ModalUiStyling.StylePreviewFrame(frame);
+        return frame;
     }
 
     private Button CreateRowButton(MultiplayerSavePickerRow row, Vector2 minimumSize)
@@ -203,8 +220,24 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         if (_selectedCampaign?.CampaignId is { } campaignId
             && _campaignButtons.TryGetValue(campaignId, out var button))
         {
-            button.GrabFocus();
+            SetSelectedCampaignButton(button);
         }
+    }
+
+    private void SetSelectedCampaignButton(Button? button)
+    {
+        if (ReferenceEquals(_selectedCampaignButton, button))
+            return;
+
+        if (_selectedCampaignButton is not null)
+            ModalUiStyling.StyleButton(_selectedCampaignButton);
+
+        _selectedCampaignButton = button;
+        if (_selectedCampaignButton is null)
+            return;
+
+        ModalUiStyling.StyleSelectedButton(_selectedCampaignButton);
+        _selectedCampaignButton.GrabFocus();
     }
 
     private void ContinueSelectedCampaign()
@@ -224,14 +257,14 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
         if (row?.Details is null)
         {
-            _previewRoot.AddChild(CreatePreviewLabel(MultiplayerSavePickerModel.EmptyPreviewTitle, 28, HorizontalAlignment.Center));
-            _previewRoot.AddChild(CreatePreviewLabel(MultiplayerSavePickerModel.EmptyPreviewBody, 20, HorizontalAlignment.Center));
+            _previewRoot.AddChild(CreatePreviewLabel(MultiplayerSavePickerModel.EmptyPreviewTitle, 27, HorizontalAlignment.Center));
+            _previewRoot.AddChild(CreatePreviewLabel(MultiplayerSavePickerModel.EmptyPreviewBody, 19, HorizontalAlignment.Center));
             return;
         }
 
         var details = row.Details;
-        _previewRoot.AddChild(CreatePreviewLabel(details.Title, 28, HorizontalAlignment.Center));
-        _previewRoot.AddChild(CreatePreviewLabel(details.Subtitle, 21, HorizontalAlignment.Center));
+        _previewRoot.AddChild(CreatePreviewLabel(details.Title, 27, HorizontalAlignment.Center));
+        _previewRoot.AddChild(CreatePreviewLabel(details.Subtitle, 19, HorizontalAlignment.Center));
 
         var scroll = new ScrollContainer
         {
@@ -244,20 +277,20 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        content.AddThemeConstantOverride("separation", 8);
+        content.AddThemeConstantOverride("separation", 7);
         scroll.AddChild(content);
 
-        content.AddChild(CreatePreviewLabel("Party", 21, HorizontalAlignment.Left));
+        content.AddChild(CreatePreviewSectionTitle("Party"));
         foreach (var entry in details.RosterEntries.Count == 0
-            ? details.RosterLines.Select(line => new MultiplayerSavePickerRosterEntry(line, null, false))
+            ? details.RosterLines.Select(line => new MultiplayerSavePickerRosterEntry(line, null, "?", false))
             : details.RosterEntries)
         {
             content.AddChild(CreateRosterPreviewRow(entry));
         }
 
-        content.AddChild(CreatePreviewLabel("Run Details", 21, HorizontalAlignment.Left));
+        content.AddChild(CreatePreviewSectionTitle("Run Details"));
         foreach (var line in details.SummaryLines)
-            content.AddChild(CreatePreviewLabel(line, 18, HorizontalAlignment.Left));
+            content.AddChild(CreatePreviewLabel(line, 17, HorizontalAlignment.Left));
     }
 
     private static Control CreateRosterPreviewRow(MultiplayerSavePickerRosterEntry entry)
@@ -269,12 +302,24 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         row.AddThemeConstantOverride("separation", 8);
 
         if (entry.HasKnownPlayer)
-            row.AddChild(CreateCharacterIndicator(entry.SelectedCharacterId));
+            row.AddChild(CreateCharacterIndicator(entry.SelectedCharacterId, entry.BadgeText));
 
         var label = CreatePreviewLabel(entry.Text, 18, HorizontalAlignment.Left);
         label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         row.AddChild(label);
         return row;
+    }
+
+    private static Label CreatePreviewSectionTitle(string text)
+    {
+        var label = new Label
+        {
+            Text = text,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        ModalUiStyling.StyleSectionTitle(label);
+        return label;
     }
 
     private static Label CreatePreviewLabel(string text, int fontSize, HorizontalAlignment alignment)
@@ -310,6 +355,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             "CHARACTER.SILENT" => "res://images/ui/top_panel/character_icon_silent.png",
             "CHARACTER.DEFECT" => "res://images/ui/top_panel/character_icon_defect.png",
             "CHARACTER.NECROBINDER" => "res://images/ui/top_panel/character_icon_necrobinder.png",
+            "CHARACTER.REGENT" => "res://images/ui/top_panel/character_icon_regent.png",
             _ => null
         };
     }
@@ -323,38 +369,38 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         return ResourceLoader.Load<Texture2D>(path);
     }
 
-    private static Control CreateCharacterBadge(string? selectedCharacterId)
+    private static Control CreateCharacterBadge(string badgeText)
     {
         var panel = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(38, 34)
+            CustomMinimumSize = new Vector2(42, 38)
         };
         ModalUiStyling.StyleBadgePanel(panel);
 
         var label = new Label
         {
-            Text = MultiplayerSavePickerModel.CharacterBadgeText(selectedCharacterId),
+            Text = string.IsNullOrWhiteSpace(badgeText) ? "?" : badgeText,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            CustomMinimumSize = new Vector2(38, 34)
+            CustomMinimumSize = new Vector2(42, 38)
         };
         ModalUiStyling.StyleBody(label, 16);
         panel.AddChild(label);
         return panel;
     }
 
-    private static Control CreateCharacterIndicator(string? selectedCharacterId)
+    private static Control CreateCharacterIndicator(string? selectedCharacterId, string badgeText)
     {
         var texture = TryLoadCharacterIcon(selectedCharacterId);
         if (texture is null)
-            return CreateCharacterBadge(selectedCharacterId);
+            return CreateCharacterBadge(badgeText);
 
         return new TextureRect
         {
             Texture = texture,
             ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            CustomMinimumSize = new Vector2(34, 34)
+            CustomMinimumSize = new Vector2(42, 42)
         };
     }
 

@@ -33,6 +33,7 @@ public sealed record MultiplayerSavePickerModel(
             "CHARACTER.SILENT" => "SI",
             "CHARACTER.DEFECT" => "DE",
             "CHARACTER.NECROBINDER" => "NE",
+            "CHARACTER.REGENT" => "RG",
             _ => "??"
         };
     }
@@ -50,6 +51,7 @@ public sealed record MultiplayerSavePickerDetails(
 public sealed record MultiplayerSavePickerRosterEntry(
     string Text,
     string? SelectedCharacterId,
+    string BadgeText,
     bool HasKnownPlayer);
 
 public sealed record MultiplayerSavePickerRow(
@@ -115,11 +117,12 @@ public sealed record MultiplayerSavePickerRow(
         };
 
         var rosterEntries = metadata.Roster.Count == 0
-            ? [new MultiplayerSavePickerRosterEntry("Unknown party", null, false)]
+            ? [new MultiplayerSavePickerRosterEntry("Unknown party", null, "?", false)]
             : metadata.Roster
                 .Select((player, index) => new MultiplayerSavePickerRosterEntry(
                     $"{index + 1}. {DisplayName(player)}",
                     player.SelectedCharacterId,
+                    BadgeText(player),
                     true))
                 .ToArray();
         var rosterLines = rosterEntries.Select(entry => entry.Text).ToArray();
@@ -151,6 +154,7 @@ public sealed record MultiplayerSavePickerRow(
             "CHARACTER.SILENT" => "The Silent",
             "CHARACTER.DEFECT" => "The Defect",
             "CHARACTER.NECROBINDER" => "The Necrobinder",
+            "CHARACTER.REGENT" => "The Regent",
             _ => null
         };
         if (knownName is not null)
@@ -176,4 +180,25 @@ public sealed record MultiplayerSavePickerRow(
 
     private static string FormatTimestamp(DateTimeOffset timestamp) =>
         timestamp.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+
+    private static string BadgeText(PlayerIdentity player)
+    {
+        var characterBadge = MultiplayerSavePickerModel.CharacterBadgeText(player.SelectedCharacterId);
+        return characterBadge == "??" ? InitialBadge(player.DisplayName) : characterBadge;
+    }
+
+    private static string InitialBadge(string? displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+            return "?";
+
+        var trimmed = displayName.Trim();
+        foreach (var character in trimmed)
+        {
+            if (char.IsLetterOrDigit(character))
+                return char.ToUpperInvariant(character).ToString();
+        }
+
+        return "?";
+    }
 }

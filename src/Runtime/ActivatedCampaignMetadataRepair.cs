@@ -33,13 +33,10 @@ public sealed class ActivatedCampaignMetadataRepair : IActivatedCampaignMetadata
         var metadata = _bank.GetCampaign(campaignId);
         var snapshot = _metadataExtractor.CaptureActiveSaveMetadata();
 
-        var repairedRoster = metadata.Roster;
-        var rosterChanged = false;
-        if (metadata.Roster.Count == 0 && snapshot.Roster.Count > 0)
-        {
-            repairedRoster = snapshot.Roster;
-            rosterChanged = true;
-        }
+        var repairedRoster = CampaignRosterMerger.MergeByStableId(
+            metadata.Roster,
+            snapshot.Roster,
+            out var rosterChanged);
 
         var repairedProgress = string.IsNullOrWhiteSpace(snapshot.ActOrFloor)
             ? metadata.ActOrFloor

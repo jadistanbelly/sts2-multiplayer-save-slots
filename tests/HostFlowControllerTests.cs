@@ -14,9 +14,11 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session tracks pending new run", SessionTracksPendingNewRun);
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
+        yield return new TestCase("STS2 save bank adapter repairs listed campaign character ids from payload", SaveBankAdapterRepairsListedCampaignCharacterIdsFromPayload);
         yield return new TestCase("picker model exposes default selected campaign", PickerModelExposesDefaultSelectedCampaign);
         yield return new TestCase("picker model describes empty campaign list", PickerModelDescribesEmptyCampaignList);
         yield return new TestCase("picker character badge labels are stable", PickerCharacterBadgeLabelsAreStable);
+        yield return new TestCase("picker roster entries use player badge fallback", PickerRosterEntriesUsePlayerBadgeFallback);
         yield return new TestCase("controller disambiguates duplicate picker rows", ControllerDisambiguatesDuplicatePickerRows);
         yield return new TestCase("picker subtitle omits unknown progress", PickerSubtitleOmitsUnknownProgress);
         yield return new TestCase("picker campaign row includes full details", PickerCampaignRowIncludesFullDetails);
@@ -165,6 +167,31 @@ public static class HostFlowControllerTests
         AssertEx.Equal("Floor 7 - 2 players", model.Rows[1].Subtitle);
     }
 
+    private static void SaveBankAdapterRepairsListedCampaignCharacterIdsFromPayload()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        File.WriteAllText(
+            source,
+            "{\"platform_type\":\"steam\",\"players\":[{\"net_id\":111,\"character_id\":\"CHARACTER.SILENT\"},{\"net_id\":222,\"character_id\":\"CHARACTER.IRONCLAD\"}]}");
+        var bank = new Storage.MultiplayerSaveBank(new Storage.SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [new PlayerIdentity("Steam:111", "Alice"), new PlayerIdentity("Steam:222", "Bob")],
+            source,
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            "Floor 5"));
+        var adapter = new Sts2SaveBankAdapter(bank);
+
+        var campaigns = adapter.ListCampaigns(MultiplayerGameMode.Standard);
+
+        AssertEx.Equal(1, campaigns.Count);
+        AssertEx.Equal(metadata.CampaignId, campaigns[0].CampaignId);
+        AssertEx.Equal("CHARACTER.SILENT", campaigns[0].Roster[0].SelectedCharacterId);
+        AssertEx.Equal("CHARACTER.IRONCLAD", campaigns[0].Roster[1].SelectedCharacterId);
+        AssertEx.Equal("CHARACTER.SILENT", bank.GetCampaign(metadata.CampaignId).Roster[0].SelectedCharacterId);
+    }
+
     private static void PickerModelExposesDefaultSelectedCampaign()
     {
         var model = new MultiplayerSavePickerModel(
@@ -226,8 +253,26 @@ public static class HostFlowControllerTests
         AssertEx.Equal("SI", badgeText.Invoke(null, ["CHARACTER.SILENT"]));
         AssertEx.Equal("DE", badgeText.Invoke(null, ["CHARACTER.DEFECT"]));
         AssertEx.Equal("NE", badgeText.Invoke(null, ["CHARACTER.NECROBINDER"]));
+        AssertEx.Equal("RG", badgeText.Invoke(null, ["CHARACTER.REGENT"]));
         AssertEx.Equal("??", badgeText.Invoke(null, ["CHARACTER.UNKNOWN"]));
         AssertEx.Equal("??", badgeText.Invoke(null, [null]));
+    }
+
+    private static void PickerRosterEntriesUsePlayerBadgeFallback()
+    {
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard,
+            "Alice",
+            [new PlayerIdentity("Steam:1", "Alice")],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            null,
+            "checksum",
+            "Floor 1"));
+
+        var details = row.Details ?? throw new InvalidOperationException("Expected campaign details");
+        AssertEx.Equal("A", details.RosterEntries[0].BadgeText);
     }
 
     private static void ControllerDisambiguatesDuplicatePickerRows()

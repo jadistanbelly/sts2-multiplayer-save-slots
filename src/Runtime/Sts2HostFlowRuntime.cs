@@ -14,6 +14,7 @@ using MegaCrit.Sts2.Core.Saves.Managers;
 using MultiplayerSaveSlots.Core;
 using MultiplayerSaveSlots.Storage;
 using MultiplayerSaveSlots.UI;
+using System.Globalization;
 using System.Text.Json;
 
 namespace MultiplayerSaveSlots.Runtime;
@@ -28,7 +29,129 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
     }
 
     public IReadOnlyList<CampaignMetadata> ListCampaigns(MultiplayerGameMode gameMode) =>
-        _bank.ListCampaigns(gameMode);
+        _bank.ListCampaigns(gameMode)
+            .Select(TryRepairPayloadCharacterMetadata)
+            .ToList();
+
+    private CampaignMetadata TryRepairPayloadCharacterMetadata(CampaignMetadata metadata)
+    {
+        if (!metadata.Roster.Any(player => string.IsNullOrWhiteSpace(player.SelectedCharacterId)))
+            return metadata;
+
+        try
+        {
+            var payloadRoster = ReadPayloadRoster(metadata);
+            var repairedRoster = CampaignRosterMerger.MergeByStableId(metadata.Roster, payloadRoster, out var rosterChanged);
+            if (!rosterChanged)
+                return metadata;
+
+            var repaired = metadata with
+            {
+                Label = CampaignLabeler.Build(repairedRoster),
+                Roster = repairedRoster
+            };
+            _bank.UpdateMetadata(repaired);
+            return repaired;
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
+        {
+            Console.Error.WriteLine($"[MultiplayerSaveSlots] Failed to repair picker metadata for {metadata.CampaignId}: {ex.Message}");
+            return metadata;
+        }
+    }
+
+    private IReadOnlyList<PlayerIdentity> ReadPayloadRoster(CampaignMetadata metadata)
+    {
+        var payloadPath = _bank.GetPayloadPath(metadata.CampaignId);
+        if (!File.Exists(payloadPath))
+            return [];
+
+        using var document = JsonDocument.Parse(File.ReadAllText(payloadPath));
+        var root = document.RootElement;
+        if (!root.TryGetProperty("players", out var players) || players.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var platformPrefix = PlatformPrefix(root, metadata.Roster);
+        if (platformPrefix is null)
+            return [];
+
+        var roster = new List<PlayerIdentity>();
+        foreach (var player in players.EnumerateArray())
+        {
+            if (!TryReadNetId(player, out var netId) ||
+                !TryReadString(player, "character_id", out var characterId))
+            {
+                continue;
+            }
+
+            roster.Add(new PlayerIdentity($"{platformPrefix}:{netId}", string.Empty, characterId));
+        }
+
+        return roster;
+    }
+
+    private static string? PlatformPrefix(JsonElement root, IReadOnlyList<PlayerIdentity> existingRoster)
+    {
+        if (TryReadString(root, "platform_type", out var platformType))
+        {
+            return platformType.Trim().ToLowerInvariant() switch
+            {
+                "steam" => "Steam",
+                "none" => "None",
+                _ => null
+            };
+        }
+
+        foreach (var stableId in existingRoster.Select(player => player.StableId))
+        {
+            if (string.IsNullOrWhiteSpace(stableId))
+                continue;
+
+            var separator = stableId.IndexOf(':');
+            if (separator > 0)
+                return stableId[..separator];
+        }
+
+        return null;
+    }
+
+    private static bool TryReadNetId(JsonElement player, out string netId)
+    {
+        netId = string.Empty;
+        if (!player.TryGetProperty("net_id", out var value))
+            return false;
+
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.Number when value.TryGetUInt64(out var numeric):
+                netId = numeric.ToString(CultureInfo.InvariantCulture);
+                return true;
+            case JsonValueKind.String:
+                var text = value.GetString();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    netId = text.Trim();
+                    return true;
+                }
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryReadString(JsonElement element, string propertyName, out string value)
+    {
+        value = string.Empty;
+        if (!element.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.String)
+            return false;
+
+        var text = property.GetString();
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        value = text.Trim();
+        return true;
+    }
 }
 
 public sealed class Sts2ActiveSaveSync : IActiveSaveSync

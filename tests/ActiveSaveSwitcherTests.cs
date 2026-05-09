@@ -47,6 +47,7 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("active save sync finalizes pending new run when metadata extractor fails", ActiveSaveSyncFinalizesPendingNewRunWhenMetadataExtractorFails));
         tests.Add(new TestCase("metadata repair updates empty roster and progress", MetadataRepairUpdatesEmptyRosterAndProgress));
         tests.Add(new TestCase("metadata repair preserves existing roster", MetadataRepairPreservesExistingRoster));
+        tests.Add(new TestCase("metadata repair fills missing selected character ids", MetadataRepairFillsMissingSelectedCharacterIds));
         tests.Add(new TestCase("metadata repair ignores extractor failure", MetadataRepairIgnoresExtractorFailure));
     }
 
@@ -869,6 +870,35 @@ public static class ActiveSaveSwitcherTests
         AssertEx.Equal(1, updated.Roster.Count);
         AssertEx.Equal("steam:existing", updated.Roster[0].StableId);
         AssertEx.Equal("Floor 9", updated.ActOrFloor);
+    }
+
+    private static void MetadataRepairFillsMissingSelectedCharacterIds()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        File.WriteAllText(source, "campaign");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [new PlayerIdentity("Steam:1", "Alice"), new PlayerIdentity("Steam:2", "Bob")],
+            source,
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z")));
+        var repair = new ActivatedCampaignMetadataRepair(
+            bank,
+            new FakeCampaignMetadataExtractor(new CampaignMetadataSnapshot(
+                [
+                    new PlayerIdentity("Steam:1", "Alice", "CHARACTER.SILENT"),
+                    new PlayerIdentity("Steam:2", "Bob", "CHARACTER.IRONCLAD")
+                ],
+                "Floor 5")));
+
+        repair.RepairActivatedCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-08T12:00:00Z"));
+
+        var updated = bank.GetCampaign(metadata.CampaignId);
+        AssertEx.Equal("Alice, Bob", updated.Label);
+        AssertEx.Equal("CHARACTER.SILENT", updated.Roster[0].SelectedCharacterId);
+        AssertEx.Equal("CHARACTER.IRONCLAD", updated.Roster[1].SelectedCharacterId);
+        AssertEx.Equal("Floor 5", updated.ActOrFloor);
     }
 
     private static void MetadataRepairIgnoresExtractorFailure()

@@ -223,6 +223,7 @@ public static class HostFlowPatchTests
         AssertEx.Equal("res://images/ui/top_panel/character_icon_silent.png", characterIconPath.Invoke(null, ["CHARACTER.SILENT"]));
         AssertEx.Equal("res://images/ui/top_panel/character_icon_defect.png", characterIconPath.Invoke(null, ["CHARACTER.DEFECT"]));
         AssertEx.Equal("res://images/ui/top_panel/character_icon_necrobinder.png", characterIconPath.Invoke(null, ["CHARACTER.NECROBINDER"]));
+        AssertEx.Equal("res://images/ui/top_panel/character_icon_regent.png", characterIconPath.Invoke(null, ["CHARACTER.REGENT"]));
         AssertEx.Equal(null, characterIconPath.Invoke(null, ["CHARACTER.UNKNOWN"]));
         AssertEx.Equal(null, characterIconPath.Invoke(null, [null]));
     }
@@ -250,10 +251,13 @@ public static class HostFlowPatchTests
             "BuildCampaignList",
             "BuildPreviewPanel",
             "SelectCampaignPreview",
-            "ContinueSelectedCampaign"
+            "ContinueSelectedCampaign",
+            "CreatePreviewSectionTitle",
+            "CreatePreviewFrame",
+            "SetSelectedCampaignButton"
         })
         {
-            var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
             AssertEx.True(method is not null, $"{methodName} helper was not found");
         }
     }
