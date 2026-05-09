@@ -23,6 +23,7 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal exposes explicit UI builder", PickerModalExposesExplicitUiBuilder);
         yield return new TestCase("picker modal maps native character icon paths", PickerModalMapsNativeCharacterIconPaths);
         yield return new TestCase("picker modal exposes badge fallback helper", PickerModalExposesBadgeFallbackHelper);
+        yield return new TestCase("picker modal constrains character icon texture size", PickerModalConstrainsCharacterIconTextureSize);
         yield return new TestCase("picker modal exposes split panel helpers", PickerModalExposesSplitPanelHelpers);
         yield return new TestCase("recovery modal exposes explicit UI builder", RecoveryModalExposesExplicitUiBuilder);
         yield return new TestCase("RMP host compatibility opens picker before direct host", RmpHostCompatibilityOpensPickerBeforeDirectHost);
@@ -239,6 +240,35 @@ public static class HostFlowPatchTests
 
         AssertEx.True(createCharacterBadge.ReturnType.FullName == "Godot.Control");
         AssertEx.True(createCharacterIndicator.ReturnType.FullName == "Godot.Control");
+    }
+
+    private static void PickerModalConstrainsCharacterIconTextureSize()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var getCharacterIconSize = modalType!.GetMethod("GetCharacterIconSize", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("GetCharacterIconSize helper was not found");
+        var getCharacterIconExpandMode = modalType.GetMethod("GetCharacterIconExpandMode", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("GetCharacterIconExpandMode helper was not found");
+        var createCharacterIconTextureRect = modalType.GetMethod("CreateCharacterIconTextureRect", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("CreateCharacterIconTextureRect helper was not found");
+
+        var iconSize = getCharacterIconSize.Invoke(null, [])!;
+        var expandMode = getCharacterIconExpandMode.Invoke(null, [])!;
+
+        AssertEx.Equal(42f, GetVector2Component(iconSize, "X"));
+        AssertEx.Equal(42f, GetVector2Component(iconSize, "Y"));
+        AssertEx.Equal("IgnoreSize", expandMode.ToString());
+        AssertEx.Equal("Godot.TextureRect", createCharacterIconTextureRect.ReturnType.FullName);
+    }
+
+    private static float GetVector2Component(object vector, string name)
+    {
+        var type = vector.GetType();
+        var value = type.GetProperty(name)?.GetValue(vector)
+            ?? type.GetField(name)?.GetValue(vector)
+            ?? throw new InvalidOperationException($"Vector2 component {name} was not found");
+        return Convert.ToSingle(value);
     }
 
     private static void PickerModalExposesSplitPanelHelpers()

@@ -369,11 +369,15 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         return ResourceLoader.Load<Texture2D>(path);
     }
 
+    private static Vector2 GetCharacterIconSize() => new(42, 42);
+
+    private static TextureRect.ExpandModeEnum GetCharacterIconExpandMode() => TextureRect.ExpandModeEnum.IgnoreSize;
+
     private static Control CreateCharacterBadge(string badgeText)
     {
         var panel = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(42, 38)
+            CustomMinimumSize = GetCharacterIconSize()
         };
         ModalUiStyling.StyleBadgePanel(panel);
 
@@ -382,12 +386,23 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             Text = string.IsNullOrWhiteSpace(badgeText) ? "?" : badgeText,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            CustomMinimumSize = new Vector2(42, 38)
+            CustomMinimumSize = GetCharacterIconSize()
         };
         ModalUiStyling.StyleBody(label, 16);
         panel.AddChild(label);
         return panel;
     }
+
+    private static TextureRect CreateCharacterIconTextureRect(Texture2D texture) =>
+        new()
+        {
+            Texture = texture,
+            ExpandMode = GetCharacterIconExpandMode(),
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            CustomMinimumSize = GetCharacterIconSize(),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+            SizeFlagsVertical = SizeFlags.ShrinkBegin
+        };
 
     private static Control CreateCharacterIndicator(string? selectedCharacterId, string badgeText)
     {
@@ -395,13 +410,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         if (texture is null)
             return CreateCharacterBadge(badgeText);
 
-        return new TextureRect
-        {
-            Texture = texture,
-            ExpandMode = TextureRect.ExpandModeEnum.FitWidthProportional,
-            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            CustomMinimumSize = new Vector2(42, 42)
-        };
+        return CreateCharacterIconTextureRect(texture);
     }
 
     private void ShowDetails(MultiplayerSavePickerDetails details)
