@@ -8,6 +8,8 @@ namespace MultiplayerSaveSlots.UI;
 
 public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 {
+    private const float DetailsBodyMinimumWidth = 580f;
+
     private readonly HostFlowController _controller;
     private readonly MultiplayerSavePickerModel _model;
     private Control? _defaultFocusedControl;
@@ -183,13 +185,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         };
         root.AddChild(scroll);
 
-        var body = new Label
-        {
-            Text = BuildDetailsBody(details),
-            AutowrapMode = TextServer.AutowrapMode.WordSmart
-        };
-        ModalUiStyling.StyleBody(body, 20);
-        scroll.AddChild(body);
+        scroll.AddChild(CreateDetailsBodyLabel(BuildDetailsBody(details)));
 
         var close = new Button { Text = "Close", CustomMinimumSize = new Vector2(180, 44) };
         ModalUiStyling.StyleButton(close);
@@ -205,6 +201,21 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private static string BuildDetailsBody(MultiplayerSavePickerDetails details) =>
         $"{string.Join('\n', details.SummaryLines)}\n\nRoster\n{string.Join('\n', details.RosterLines)}";
+
+    private static Label CreateDetailsBodyLabel(string text)
+    {
+        var body = new Label
+        {
+            Text = text,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(GetDetailsBodyMinimumWidth(), 0)
+        };
+        ModalUiStyling.StyleBody(body, 20);
+        return body;
+    }
+
+    private static float GetDetailsBodyMinimumWidth() => DetailsBodyMinimumWidth;
 
     private void SelectRow(MultiplayerSavePickerRow row)
     {

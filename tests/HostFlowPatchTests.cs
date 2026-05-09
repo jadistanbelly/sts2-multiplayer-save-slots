@@ -19,6 +19,7 @@ public static class HostFlowPatchTests
         yield return new TestCase("run save manager patch exposes postfix", RunSaveManagerPatchExposesPostfix);
         yield return new TestCase("recovery modal exposes show method", RecoveryModalExposesShowMethod);
         yield return new TestCase("picker modal builds details body text", PickerModalBuildsDetailsBodyText);
+        yield return new TestCase("picker modal keeps details body readable width", PickerModalKeepsDetailsBodyReadableWidth);
         yield return new TestCase("picker modal exposes explicit UI builder", PickerModalExposesExplicitUiBuilder);
         yield return new TestCase("recovery modal exposes explicit UI builder", RecoveryModalExposesExplicitUiBuilder);
         yield return new TestCase("RMP host compatibility opens picker before direct host", RmpHostCompatibilityOpensPickerBeforeDirectHost);
@@ -183,6 +184,21 @@ public static class HostFlowPatchTests
         var body = buildDetailsBody.Invoke(null, [details]);
 
         AssertEx.Equal("Progress: Floor 18\nPlayers: 2\n\nRoster\n1. buddy1\n2. buddy2", body);
+    }
+
+    private static void PickerModalKeepsDetailsBodyReadableWidth()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var minimumWidthMethod = modalType!.GetMethod("GetDetailsBodyMinimumWidth", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Details body minimum width helper was not found");
+        var createDetailsBodyLabel = modalType.GetMethod("CreateDetailsBodyLabel", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Details body label helper was not found");
+
+        var minimumWidth = (float)minimumWidthMethod.Invoke(null, [])!;
+
+        AssertEx.True(createDetailsBodyLabel.ReturnType.FullName == "Godot.Label");
+        AssertEx.True(minimumWidth >= 560, "Details body label needs a stable readable width");
     }
 
     private static void PickerModalExposesExplicitUiBuilder()
