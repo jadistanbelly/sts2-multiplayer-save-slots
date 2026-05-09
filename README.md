@@ -71,19 +71,49 @@ When I say "merge PR #N and tag vX.Y.Z":
 6. Report the GitHub Release URL and zip asset name.
 ```
 
-## In-Game Smoke Test
+## Automation-Assisted In-Game Smoke Test
 
-1. Build the mod.
-2. Copy `MultiplayerSaveSlots.json` and `bin/Debug/MultiplayerSaveSlots.dll` to `<STS2>/mods/MultiplayerSaveSlots/`.
-3. Launch STS2 with mods enabled.
-4. Open `Multiplayer`.
-5. Confirm `Host` is visible even when a current multiplayer save exists.
-6. Select `Host -> Standard`.
-7. Confirm the `Multiplayer Saves - Standard` picker appears.
-8. Choose `Start New Run`.
-9. Confirm vanilla hosting continues.
-10. Progress far enough for STS2 to write the multiplayer run save.
-11. Confirm `MultiplayerSaveSlots/index.json` gains a new campaign id.
-12. Re-open `Host -> Standard` and confirm the new campaign appears in the picker.
-13. With an unmanaged `current_run_mp.save` present, choose a host action and confirm the recovery modal offers `Duplicate Active Save`.
-14. With a managed active save changed after activation, choose a different campaign and confirm the recovery modal offers `Sync Active Save`.
+The smoke setup flow automates packaging, local mod installation, save-state backup, and fixture application. It does not automate STS2 menu clicks or Steam multiplayer.
+
+First build the drop-in package:
+
+```bash
+scripts/release-local.sh --package-only v0.1.0
+```
+
+Install that package into the local STS2 mods folder:
+
+```bash
+scripts/smoke-setup-local.sh install --tag v0.1.0
+```
+
+Fixtures are local artifacts created from real STS2 save files and are ignored by git. Capture a fixture from the active multiplayer save path you want to reuse:
+
+```bash
+ACTIVE_SAVE="$HOME/.local/share/Steam/steamapps/common/Slay the Spire 2/preferences/profile_1/saves/current_run_mp.save"
+scripts/smoke-setup-local.sh capture-fixture --name unmanaged-active --active-save-path "$ACTIVE_SAVE"
+```
+
+Apply a fixture before launching STS2. The script backs up existing `current_run_mp.save` and `MultiplayerSaveSlots/` state before mutation:
+
+```bash
+ACTIVE_SAVE="$HOME/.local/share/Steam/steamapps/common/Slay the Spire 2/preferences/profile_1/saves/current_run_mp.save"
+scripts/smoke-setup-local.sh apply-fixture --name unmanaged-active --active-save-path "$ACTIVE_SAVE"
+```
+
+Manual in-game checklist after setup:
+
+1. Launch STS2 with mods enabled.
+2. Open `Multiplayer`.
+3. Confirm `Host` is visible even when a current multiplayer save exists.
+4. Select `Host -> Standard`.
+5. Confirm the `Multiplayer Saves - Standard` picker appears.
+6. Choose `Start New Run`.
+7. Confirm vanilla hosting continues.
+8. Progress far enough for STS2 to write the multiplayer run save.
+9. Confirm `MultiplayerSaveSlots/index.json` gains a new campaign id.
+10. Re-open `Host -> Standard` and confirm the new campaign appears in the picker.
+11. With an unmanaged `current_run_mp.save` fixture applied, choose a host action and confirm the recovery modal offers `Duplicate Active Save`.
+12. With a managed active save changed after activation, choose a different campaign and confirm the recovery modal offers `Sync Active Save`.
+
+Smoke reports and backups are written under `artifacts/smoke/`.
