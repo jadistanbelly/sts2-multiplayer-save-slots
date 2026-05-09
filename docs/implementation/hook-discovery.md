@@ -224,3 +224,9 @@ Phase 4 does not add new STS2 hooks. It reuses the host picker flow and save-syn
 Phase 7 captures pending new-run roster metadata from `StartRunLobby.BeginRunForAllPlayers(...)` before vanilla begins the run for all players. The lobby exposes `Players`, `NetService.Platform`, and each `LobbyPlayer.id`/`slotId`; display names are resolved through `PlatformUtil.GetPlayerName(platform, playerId)`.
 
 Active-save progress metadata is extracted from `SaveManager.Instance.LoadAndCanonicalizeMultiplayerRunSave(...)` into `SerializableRun`, using `CurrentActIndex`, `MapPointHistory`, `Players`, and `PlatformType`.
+
+## Phase 10 Compatibility Warning Hook
+
+Phase 10 wraps `NMultiplayerLoadGameScreen.ShouldAllowRunToBegin()` so the mod can run after vanilla has accepted an Embark attempt but before the loaded run begins. The patch preserves vanilla `false` results and only runs the warning guard after vanilla returns `true`.
+
+The runtime reads the screen's private `_runLobby` field as a `LoadRunLobby`. That lobby exposes `ConnectedPlayerIds` and `NetService.Platform`; the mod also adds `PlatformUtil.GetLocalPlayerId(platform)` before comparing current participants with the selected campaign's stored original roster. The warning is one-shot for the same selected campaign and participant-id set, then the next identical Embark attempt proceeds to vanilla validation.

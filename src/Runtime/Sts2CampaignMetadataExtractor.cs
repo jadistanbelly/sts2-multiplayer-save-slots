@@ -23,6 +23,20 @@ public sealed class Sts2CampaignMetadataExtractor : ICampaignMetadataExtractor
     public static CampaignMetadataSnapshot FromStartRunLobby(StartRunLobby lobby) =>
         new(CapturePlayers(lobby.Players, lobby.NetService.Platform), null);
 
+    public static CampaignMetadataSnapshot FromLoadRunLobby(LoadRunLobby lobby)
+    {
+        var platform = lobby.NetService.Platform;
+        var playerIds = lobby.ConnectedPlayerIds.ToHashSet();
+        playerIds.Add(PlatformUtil.GetLocalPlayerId(platform));
+
+        var roster = playerIds
+            .Order()
+            .Select(playerId => ToIdentity(platform, playerId, null))
+            .ToList();
+
+        return new CampaignMetadataSnapshot(roster, null);
+    }
+
     public static CampaignMetadataSnapshot FromSerializableRun(SerializableRun run)
     {
         var roster = run.Players

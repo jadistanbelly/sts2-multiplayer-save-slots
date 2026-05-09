@@ -18,6 +18,9 @@ public static class HostFlowPatchTests
         yield return new TestCase("save manager patch propagates vanilla task failure", SaveManagerPatchPropagatesVanillaFailure);
         yield return new TestCase("recovery modal exposes show method", RecoveryModalExposesShowMethod);
         yield return new TestCase("picker modal builds details body text", PickerModalBuildsDetailsBodyText);
+        yield return new TestCase("load lobby compatibility patch preserves vanilla false", LoadLobbyCompatibilityPatchPreservesVanillaFalse);
+        yield return new TestCase("load lobby compatibility patch applies guard after vanilla true", LoadLobbyCompatibilityPatchAppliesGuardAfterVanillaTrue);
+        yield return new TestCase("load lobby compatibility patch exposes postfix", LoadLobbyCompatibilityPatchExposesPostfix);
     }
 
     private static void GameModeMapHandlesAllModes()
@@ -167,6 +170,46 @@ public static class HostFlowPatchTests
         var body = buildDetailsBody.Invoke(null, [details]);
 
         AssertEx.Equal("Progress: Floor 18\nPlayers: 2\n\nRoster\n1. buddy1\n2. buddy2", body);
+    }
+
+    private static void LoadLobbyCompatibilityPatchPreservesVanillaFalse()
+    {
+        var guardCalls = 0;
+
+        var result = LoadLobbyCompatibilityPatch.AppendCompatibilityWarning(
+            Task.FromResult(false),
+            () =>
+            {
+                guardCalls++;
+                return true;
+            }).GetAwaiter().GetResult();
+
+        AssertEx.False(result);
+        AssertEx.Equal(0, guardCalls);
+    }
+
+    private static void LoadLobbyCompatibilityPatchAppliesGuardAfterVanillaTrue()
+    {
+        var guardCalls = 0;
+
+        var result = LoadLobbyCompatibilityPatch.AppendCompatibilityWarning(
+            Task.FromResult(true),
+            () =>
+            {
+                guardCalls++;
+                return false;
+            }).GetAwaiter().GetResult();
+
+        AssertEx.False(result);
+        AssertEx.Equal(1, guardCalls);
+    }
+
+    private static void LoadLobbyCompatibilityPatchExposesPostfix()
+    {
+        var patchType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.Patches.LoadLobbyCompatibilityPatch");
+        AssertEx.True(patchType is not null);
+        var postfix = patchType!.GetMethod("Postfix", BindingFlags.Static | BindingFlags.Public);
+        AssertEx.True(postfix is not null);
     }
 
     private static (FieldInfo ResumingField, MethodInfo Prefix, Type PatchType) GetHostSubmenuPatchMembers()
