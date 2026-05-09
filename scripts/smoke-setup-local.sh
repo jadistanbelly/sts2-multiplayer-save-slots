@@ -700,7 +700,8 @@ apply_fixture_command() {
   fi
 
   if ! mv "$active_stage" "$active_save_path"; then
-    rollback_apply_failure "failed to move staged active save into place" "$active_save_path" "$bank_dir" "$backup_dir" "$bank_stage_parent" "$moved_bank_parent" "$active_stage_parent"
+    best_effort_rm "$active_stage_parent" "$bank_stage_parent"
+    die "failed to move staged active save into place"
   fi
 
   if [[ -d "$bank_dir" ]]; then

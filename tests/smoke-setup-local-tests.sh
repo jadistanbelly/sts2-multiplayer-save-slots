@@ -856,6 +856,7 @@ SH
   local active_fail_bin="$active_fail_tmp/bin"
   local active_fail_out="$active_fail_tmp/fail-active.out"
   local active_fail_err="$active_fail_tmp/fail-active.err"
+  local active_fail_rm_marker="$active_fail_tmp/live-bank-rm-hit"
 
   mkdir -p "$active_fail_bank" "$active_fail_fixture/active" "$active_fail_fixture/bank/MultiplayerSaveSlots" "$active_fail_bin"
   printf 'live active before active mv failure\n' > "$active_fail_active"
@@ -879,8 +880,9 @@ SH
   chmod +x "$active_fail_bin/mv"
   cat > "$active_fail_bin/rm" <<SH
 #!/usr/bin/env bash
-if [[ "\${2-}" == "$active_fail_tmp/profile/.current_run_mp.save.apply."* || "\${2-}" == "$active_fail_tmp/profile/.MultiplayerSaveSlots.apply."* ]]; then
-  printf 'simulated apply cleanup failure\n' >&2
+if [[ "\${1-}" == "-rf" && "\${2-}" == "$active_fail_bank" ]]; then
+  printf 'hit\n' > "$active_fail_rm_marker"
+  printf 'unexpected live bank removal during active move failure\n' >&2
   exit 47
 fi
 
@@ -893,8 +895,9 @@ SH
   fi
 
   assert_contains "$active_fail_err" "failed to move staged active save into place"
-  grep -Fq 'live active before active mv failure' "$active_fail_active" || fail "active move failure did not restore active save"
+  grep -Fq 'live active before active mv failure' "$active_fail_active" || fail "active move failure changed active save"
   grep -Fq 'live bank before active mv failure' "$active_fail_bank/index.json" || fail "active move failure changed bank"
+  [[ ! -e "$active_fail_rm_marker" ]] || fail "active move failure attempted live bank removal"
   if compgen -G "$active_fail_tmp/profile/.MultiplayerSaveSlots.*" >/dev/null || compgen -G "$active_fail_tmp/profile/.current_run_mp.save.apply.*" >/dev/null; then
     fail "active move failure left apply temp paths"
   fi
