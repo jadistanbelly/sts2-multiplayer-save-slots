@@ -24,6 +24,7 @@ public static class HostFlowControllerTests
         yield return new TestCase("compatibility checker skips roster without stable ids", CompatibilityCheckerSkipsRosterWithoutStableIds);
         yield return new TestCase("compatibility checker warning key is stable", CompatibilityCheckerWarningKeyIsStable);
         yield return new TestCase("compatibility guard warns once for identical mismatch", CompatibilityGuardWarnsOnceForIdenticalMismatch);
+        yield return new TestCase("compatibility guard acknowledges after warning display", CompatibilityGuardAcknowledgesAfterWarningDisplay);
         yield return new TestCase("compatibility guard allows without selected campaign", CompatibilityGuardAllowsWithoutSelectedCampaign);
         yield return new TestCase("controller starts new run through continuation", ControllerStartsNewRunThroughContinuation);
         yield return new TestCase("controller does not start new run when active preflight fails", ControllerStopsStartNewWhenPreflightFails);
@@ -330,6 +331,41 @@ public static class HostFlowControllerTests
         AssertEx.True(second);
         AssertEx.Equal(1, warnings.Count);
         AssertEx.True(warnings[0].Message.Contains("Missing original players: Bob", StringComparison.Ordinal));
+    }
+
+    private static void CompatibilityGuardAcknowledgesAfterWarningDisplay()
+    {
+        var session = new HostFlowSession();
+        session.SelectExistingCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", MultiplayerGameMode.Standard);
+
+        var failingGuard = new LoadLobbyCompatibilityGuard(
+            session,
+            _ => CampaignWithRoster([
+                new PlayerIdentity("Steam:1", "Alice"),
+                new PlayerIdentity("Steam:2", "Bob")
+            ]),
+            () => [new PlayerIdentity("Steam:1", "Alice")],
+            _ => throw new InvalidOperationException("warning UI failed"));
+
+        var allowedAfterFailure = failingGuard.ShouldAllowRunToBegin();
+
+        var warnings = new List<CampaignCompatibilityWarning>();
+        var workingGuard = new LoadLobbyCompatibilityGuard(
+            session,
+            _ => CampaignWithRoster([
+                new PlayerIdentity("Steam:1", "Alice"),
+                new PlayerIdentity("Steam:2", "Bob")
+            ]),
+            () => [new PlayerIdentity("Steam:1", "Alice")],
+            warnings.Add);
+
+        var allowedAfterDisplay = workingGuard.ShouldAllowRunToBegin();
+        var allowedAfterAcknowledgement = workingGuard.ShouldAllowRunToBegin();
+
+        AssertEx.True(allowedAfterFailure);
+        AssertEx.False(allowedAfterDisplay);
+        AssertEx.True(allowedAfterAcknowledgement);
+        AssertEx.Equal(1, warnings.Count);
     }
 
     private static void CompatibilityGuardAllowsWithoutSelectedCampaign()

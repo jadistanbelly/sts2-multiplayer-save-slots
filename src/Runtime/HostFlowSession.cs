@@ -43,12 +43,11 @@ public sealed class HostFlowSession
         _acknowledgedCompatibilityWarningKey = null;
     }
 
-    public bool ShouldShowCompatibilityWarning(string warningKey)
-    {
-        if (_acknowledgedCompatibilityWarningKey == warningKey)
-            return false;
+    public bool HasAcknowledgedCompatibilityWarning(string warningKey) =>
+        _acknowledgedCompatibilityWarningKey == warningKey;
 
+    public void AcknowledgeCompatibilityWarning(string warningKey)
+    {
         _acknowledgedCompatibilityWarningKey = warningKey;
-        return true;
     }
 }

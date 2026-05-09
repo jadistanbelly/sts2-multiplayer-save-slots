@@ -34,10 +34,11 @@ public sealed class LoadLobbyCompatibilityGuard
             if (warning is null)
                 return true;
 
-            if (!_session.ShouldShowCompatibilityWarning(warning.WarningKey))
+            if (_session.HasAcknowledgedCompatibilityWarning(warning.WarningKey))
                 return true;
 
             _showWarning(warning);
+            _session.AcknowledgeCompatibilityWarning(warning.WarningKey);
             return false;
         }
         catch (Exception ex)
