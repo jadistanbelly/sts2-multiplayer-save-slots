@@ -6,21 +6,32 @@ namespace MultiplayerSaveSlots.UI;
 public enum PickerRowKind
 {
     StartNewRun,
-    Campaign
+    Campaign,
+    ArchivedCampaign
 }
 
 public sealed record MultiplayerSavePickerModel(
     MultiplayerGameMode GameMode,
-    IReadOnlyList<MultiplayerSavePickerRow> Rows)
+    IReadOnlyList<MultiplayerSavePickerRow> Rows,
+    bool HasDeletedCampaigns = false)
 {
     public IReadOnlyList<MultiplayerSavePickerRow> CampaignRows =>
         Rows.Where(row => row.Kind == PickerRowKind.Campaign).ToList();
 
+    public IReadOnlyList<MultiplayerSavePickerRow> ArchivedRows =>
+        Rows.Where(row => row.Kind == PickerRowKind.ArchivedCampaign).ToList();
+
     public MultiplayerSavePickerRow? DefaultSelectedCampaign => CampaignRows.FirstOrDefault();
+
+    public MultiplayerSavePickerRow? DefaultSelectedArchive => ArchivedRows.FirstOrDefault();
 
     public static string EmptyPreviewTitle => "No saved runs";
 
     public static string EmptyPreviewBody => "Start a new multiplayer run to create the first save slot.";
+
+    public static string EmptyArchiveTitle => "No archived runs";
+
+    public static string EmptyArchiveBody => "Archived multiplayer runs will appear here.";
 
     public static string CharacterBadgeText(string? selectedCharacterId)
     {
@@ -59,7 +70,8 @@ public sealed record MultiplayerSavePickerRow(
     string Title,
     string Subtitle,
     string? CampaignId,
-    MultiplayerSavePickerDetails? Details)
+    MultiplayerSavePickerDetails? Details,
+    string? ArchiveKey = null)
 {
     public static MultiplayerSavePickerRow StartNew() =>
         new(PickerRowKind.StartNewRun, "Start New Run", "Create a separate multiplayer run", null, null);
@@ -67,8 +79,46 @@ public sealed record MultiplayerSavePickerRow(
     public static IReadOnlyList<MultiplayerSavePickerRow> Campaigns(IReadOnlyList<CampaignMetadata> campaigns)
     {
         var rows = campaigns.Select(Campaign).ToList();
+        return DisambiguateRows(rows);
+    }
+
+    public static IReadOnlyList<MultiplayerSavePickerRow> ArchivedCampaigns(
+        IReadOnlyList<MultiplayerSaveSlots.Core.ArchivedCampaign> archivedCampaigns)
+    {
+        var rows = archivedCampaigns.Select(ArchivedCampaign).ToList();
+        return DisambiguateRows(rows);
+    }
+
+    public static MultiplayerSavePickerRow Campaign(CampaignMetadata metadata)
+    {
+        var subtitle = BuildSubtitle(metadata);
+
+        return new MultiplayerSavePickerRow(
+            PickerRowKind.Campaign,
+            metadata.Label,
+            subtitle,
+            metadata.CampaignId,
+            BuildDetails(metadata, subtitle));
+    }
+
+    public static MultiplayerSavePickerRow ArchivedCampaign(MultiplayerSaveSlots.Core.ArchivedCampaign archived)
+    {
+        var metadata = archived.Metadata;
+        var subtitle = BuildSubtitle(metadata);
+
+        return new MultiplayerSavePickerRow(
+            PickerRowKind.ArchivedCampaign,
+            metadata.Label,
+            subtitle,
+            metadata.CampaignId,
+            BuildDetails(metadata, subtitle),
+            archived.ArchiveKey);
+    }
+
+    private static IReadOnlyList<MultiplayerSavePickerRow> DisambiguateRows(
+        IReadOnlyList<MultiplayerSavePickerRow> rows)
+    {
         var duplicateKeys = rows
-            .Where(row => row.Kind == PickerRowKind.Campaign)
             .GroupBy(row => $"{row.Title}\u001f{row.Subtitle}", StringComparer.Ordinal)
             .Where(group => group.Count() > 1)
             .Select(group => group.Key)
@@ -81,19 +131,13 @@ public sealed record MultiplayerSavePickerRow(
             .ToList();
     }
 
-    public static MultiplayerSavePickerRow Campaign(CampaignMetadata metadata)
+    private static string BuildSubtitle(CampaignMetadata metadata)
     {
         var playerLabel = metadata.Roster.Count == 1 ? "1 player" : $"{metadata.Roster.Count} players";
-        var subtitle = string.IsNullOrWhiteSpace(metadata.ActOrFloor)
+
+        return string.IsNullOrWhiteSpace(metadata.ActOrFloor)
             ? playerLabel
             : $"{metadata.ActOrFloor} - {playerLabel}";
-
-        return new MultiplayerSavePickerRow(
-            PickerRowKind.Campaign,
-            metadata.Label,
-            subtitle,
-            metadata.CampaignId,
-            BuildDetails(metadata, subtitle));
     }
 
     private MultiplayerSavePickerRow WithSubtitle(string subtitle) =>

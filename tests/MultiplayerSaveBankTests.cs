@@ -19,6 +19,17 @@ public static class MultiplayerSaveBankTests
         tests.Add(new TestCase("save bank skips metadata with mismatched campaign id while listing", SkipsMismatchedMetadataWhileListing));
         tests.Add(new TestCase("save bank update rejects unindexed campaign", UpdateRejectsUnindexedCampaign));
         tests.Add(new TestCase("save bank update rejects symlinked metadata path before mutation", UpdateRejectsSymlinkedMetadataPathBeforeMutation));
+        tests.Add(new TestCase("save bank archives campaign into deleted area", ArchivesCampaignIntoDeletedArea));
+        tests.Add(new TestCase("save bank archives campaign with suffix on collision", ArchivesCampaignWithSuffixOnCollision));
+        tests.Add(new TestCase("save bank archive rejects symlinked campaign tree before mutation", ArchiveRejectsSymlinkedCampaignTreeBeforeMutation));
+        tests.Add(new TestCase("save bank lists archived campaigns by gamemode", ListsArchivedCampaignsByGameMode));
+        tests.Add(new TestCase("save bank restores archived campaign into active index", RestoresArchivedCampaignIntoActiveIndex));
+        tests.Add(new TestCase("save bank restore rejects existing active target before mutation", RestoreRejectsExistingActiveTargetBeforeMutation));
+        tests.Add(new TestCase("save bank permanently deletes active campaign", PermanentlyDeletesActiveCampaign));
+        tests.Add(new TestCase("save bank permanently deletes archived campaign", PermanentlyDeletesArchivedCampaign));
+        tests.Add(new TestCase("save bank archive keys reject path traversal", ArchiveKeysRejectPathTraversal));
+        tests.Add(new TestCase("save bank clears deleted campaigns", ClearsDeletedCampaigns));
+        tests.Add(new TestCase("save bank clear deleted rejects symlinked archive tree before mutation", ClearDeletedRejectsSymlinkedArchiveTreeBeforeMutation));
         tests.Add(new TestCase("save bank paths reject invalid campaign ids", PathsRejectInvalidCampaignIds));
     }
 
@@ -272,6 +283,228 @@ public static class MultiplayerSaveBankTests
         AssertEx.Equal("external metadata", File.ReadAllText(externalMetadata));
     }
 
+    private static void ArchivesCampaignIntoDeletedArea()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.UtcNow));
+
+        var archivedPath = bank.ArchiveCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-10T12:34:56Z"));
+        var expectedArchive = Path.Combine(paths.DeletedDirectory, $"20260510123456-{metadata.CampaignId}");
+
+        AssertEx.Equal(expectedArchive, archivedPath);
+        AssertEx.Equal(0, bank.ListCampaigns(MultiplayerGameMode.Standard).Count);
+        AssertEx.True(!Directory.Exists(paths.CampaignDirectory(metadata.CampaignId)));
+        AssertEx.True(File.Exists(Path.Combine(archivedPath, "metadata.json")));
+        AssertEx.True(File.Exists(Path.Combine(archivedPath, "multiplayer_run.save")));
+        AssertEx.True(bank.HasDeletedCampaigns());
+    }
+
+    private static void ArchivesCampaignWithSuffixOnCollision()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.UtcNow));
+        var firstArchive = Path.Combine(paths.DeletedDirectory, $"20260510123456-{metadata.CampaignId}");
+        Directory.CreateDirectory(firstArchive);
+
+        var archivedPath = bank.ArchiveCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-10T12:34:56Z"));
+
+        AssertEx.Equal($"{firstArchive}-01", archivedPath);
+        AssertEx.True(Directory.Exists(archivedPath));
+        AssertEx.True(Directory.Exists(firstArchive));
+    }
+
+    private static void ArchiveRejectsSymlinkedCampaignTreeBeforeMutation()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.UtcNow));
+        var externalPayload = Path.Combine(temp.Path, "external.save");
+        File.WriteAllText(externalPayload, "external payload");
+        File.Delete(paths.PayloadPath(metadata.CampaignId));
+        File.CreateSymbolicLink(paths.PayloadPath(metadata.CampaignId), externalPayload);
+
+        AssertEx.Throws<StoragePathSafetyException>(() =>
+            bank.ArchiveCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-10T12:34:56Z")));
+        AssertEx.Equal(metadata.CampaignId, JsonFile.Read<CampaignIndex>(paths.IndexPath).CampaignIds.Single());
+        AssertEx.True(Directory.Exists(paths.CampaignDirectory(metadata.CampaignId)));
+        AssertEx.True(!Directory.Exists(paths.DeletedDirectory));
+        AssertEx.Equal("external payload", File.ReadAllText(externalPayload));
+    }
+
+    private static void ListsArchivedCampaignsByGameMode()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var standard = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "standard.save", "standard"),
+            new DateTimeOffset(2026, 5, 8, 12, 0, 0, TimeSpan.Zero)));
+        var daily = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Daily,
+            [],
+            CreatePayload(temp.Path, "daily.save", "daily"),
+            new DateTimeOffset(2026, 5, 8, 13, 0, 0, TimeSpan.Zero)));
+        var standardArchive = bank.ArchiveCampaign(standard.CampaignId, DateTimeOffset.Parse("2026-05-10T12:34:56Z"));
+        bank.ArchiveCampaign(daily.CampaignId, DateTimeOffset.Parse("2026-05-10T12:34:57Z"));
+
+        var archived = bank.ListArchivedCampaigns(MultiplayerGameMode.Standard);
+
+        AssertEx.Equal(1, archived.Count);
+        AssertEx.Equal(Path.GetFileName(standardArchive), archived[0].ArchiveKey);
+        AssertEx.Equal(standard.CampaignId, archived[0].Metadata.CampaignId);
+        AssertEx.Equal(MultiplayerGameMode.Standard, archived[0].Metadata.GameMode);
+    }
+
+    private static void RestoresArchivedCampaignIntoActiveIndex()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.UtcNow));
+        var archivedPath = bank.ArchiveCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-10T12:34:56Z"));
+        var archiveKey = Path.GetFileName(archivedPath);
+
+        var restored = bank.RestoreArchivedCampaign(archiveKey);
+        var index = JsonFile.Read<CampaignIndex>(paths.IndexPath);
+
+        AssertEx.Equal(metadata.CampaignId, restored.CampaignId);
+        AssertEx.True(Directory.Exists(paths.CampaignDirectory(metadata.CampaignId)));
+        AssertEx.True(!Directory.Exists(archivedPath));
+        AssertEx.Equal(metadata.CampaignId, index.CampaignIds.Single());
+        AssertEx.Equal(1, bank.ListCampaigns(MultiplayerGameMode.Standard).Count);
+    }
+
+    private static void RestoreRejectsExistingActiveTargetBeforeMutation()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.UtcNow));
+        var archivedPath = bank.ArchiveCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-10T12:34:56Z"));
+        var archiveKey = Path.GetFileName(archivedPath);
+        Directory.CreateDirectory(paths.CampaignDirectory(metadata.CampaignId));
+
+        AssertEx.Throws<InvalidOperationException>(() => bank.RestoreArchivedCampaign(archiveKey));
+        AssertEx.True(Directory.Exists(archivedPath));
+        AssertEx.True(Directory.Exists(paths.CampaignDirectory(metadata.CampaignId)));
+        AssertEx.Equal(0, JsonFile.Read<CampaignIndex>(paths.IndexPath).CampaignIds.Count);
+    }
+
+    private static void PermanentlyDeletesActiveCampaign()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.UtcNow));
+
+        bank.DeleteCampaign(metadata.CampaignId);
+
+        AssertEx.True(!Directory.Exists(paths.CampaignDirectory(metadata.CampaignId)));
+        AssertEx.Equal(0, JsonFile.Read<CampaignIndex>(paths.IndexPath).CampaignIds.Count);
+        AssertEx.Equal(0, bank.ListCampaigns(MultiplayerGameMode.Standard).Count);
+    }
+
+    private static void PermanentlyDeletesArchivedCampaign()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.UtcNow));
+        var archivedPath = bank.ArchiveCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-10T12:34:56Z"));
+        var archiveKey = Path.GetFileName(archivedPath);
+
+        bank.DeleteArchivedCampaign(archiveKey);
+
+        AssertEx.True(!Directory.Exists(archivedPath));
+        AssertEx.True(Directory.Exists(paths.DeletedDirectory));
+        AssertEx.False(bank.HasDeletedCampaigns());
+    }
+
+    private static void ArchiveKeysRejectPathTraversal()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+
+        AssertEx.Throws<ArgumentException>(() => paths.ArchivedCampaignDirectory("../outside"));
+        AssertEx.Throws<ArgumentException>(() => bank.RestoreArchivedCampaign("../outside"));
+        AssertEx.Throws<ArgumentException>(() => bank.DeleteArchivedCampaign("nested/outside"));
+    }
+
+    private static void ClearsDeletedCampaigns()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.UtcNow));
+        bank.ArchiveCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-10T12:34:56Z"));
+
+        bank.ClearDeletedCampaigns();
+
+        AssertEx.True(!Directory.Exists(paths.DeletedDirectory));
+        AssertEx.True(!bank.HasDeletedCampaigns());
+    }
+
+    private static void ClearDeletedRejectsSymlinkedArchiveTreeBeforeMutation()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.UtcNow));
+        var archivedPath = bank.ArchiveCampaign(metadata.CampaignId, DateTimeOffset.Parse("2026-05-10T12:34:56Z"));
+        var externalPayload = Path.Combine(temp.Path, "external.save");
+        File.WriteAllText(externalPayload, "external payload");
+        File.CreateSymbolicLink(Path.Combine(archivedPath, "linked.save"), externalPayload);
+
+        AssertEx.Throws<StoragePathSafetyException>(bank.ClearDeletedCampaigns);
+        AssertEx.True(Directory.Exists(paths.DeletedDirectory));
+        AssertEx.True(File.Exists(Path.Combine(archivedPath, "linked.save")));
+        AssertEx.Equal("external payload", File.ReadAllText(externalPayload));
+    }
+
     private static void PathsRejectInvalidCampaignIds()
     {
         var paths = new SaveBankPaths("MultiSaves");
@@ -280,6 +513,7 @@ public static class MultiplayerSaveBankTests
         AssertEx.Throws<ArgumentException>(() => paths.MetadataPath("not-a-guid"));
         AssertEx.Throws<ArgumentException>(() => paths.PayloadPath("not-a-guid"));
         AssertEx.Throws<ArgumentException>(() => paths.BackupDirectory("not-a-guid"));
+        AssertEx.Throws<ArgumentException>(() => paths.DeletedCampaignDirectory("not-a-guid", DateTimeOffset.UnixEpoch));
     }
 
     private static string CreatePayload(string directory, string fileName, string contents)

@@ -4,15 +4,21 @@ namespace MultiplayerSaveSlots.UI;
 
 internal static class ModalUiStyling
 {
-    private static readonly Color PanelBackground = new(0.07f, 0.045f, 0.035f, 0.98f);
-    private static readonly Color PanelBorder = new(0.76f, 0.52f, 0.22f, 1f);
-    private static readonly Color ButtonBackground = new(0.16f, 0.10f, 0.07f, 1f);
-    private static readonly Color ButtonHoverBackground = new(0.24f, 0.15f, 0.09f, 1f);
-    private static readonly Color ButtonPressedBackground = new(0.10f, 0.065f, 0.05f, 1f);
+    private static readonly Color PanelBackground = new(0.31f, 0.22f, 0.15f, 0.98f);
+    private static readonly Color PanelBorder = new(0.17f, 0.10f, 0.06f, 1f);
+    private static readonly Color ButtonBackground = new(0.29f, 0.16f, 0.09f, 0.98f);
+    private static readonly Color ButtonHoverBackground = new(0.40f, 0.24f, 0.13f, 1f);
+    private static readonly Color ButtonPressedBackground = new(0.20f, 0.11f, 0.07f, 1f);
+    private static readonly Color PrimaryBackground = new(0.13f, 0.48f, 0.53f, 1f);
+    private static readonly Color PrimaryHoverBackground = new(0.19f, 0.61f, 0.66f, 1f);
+    private static readonly Color PrimaryPressedBackground = new(0.08f, 0.31f, 0.36f, 1f);
+    private static readonly Color DangerBackground = new(0.46f, 0.16f, 0.10f, 1f);
+    private static readonly Color DangerHoverBackground = new(0.60f, 0.23f, 0.16f, 1f);
+    private static readonly Color DangerPressedBackground = new(0.30f, 0.09f, 0.06f, 1f);
     private static readonly Color FocusBorder = new(0.97f, 0.78f, 0.26f, 1f);
     private static readonly Color TitleText = new(0.96f, 0.78f, 0.30f, 1f);
     private static readonly Color BodyText = new(0.98f, 0.94f, 0.84f, 1f);
-    private static readonly Color PreviewBackground = new(0.10f, 0.06f, 0.045f, 0.92f);
+    private static readonly Color PreviewBackground = new(0.48f, 0.34f, 0.22f, 0.95f);
 
     public static void PrepareModalRoot(Control root)
     {
@@ -25,6 +31,8 @@ internal static class ModalUiStyling
         root.ZAsRelative = false;
         root.ZIndex = 100;
     }
+
+    public static int GetCardCornerRadius() => 12;
 
     public static PanelContainer CreatePanel(Vector2 size, float halfWidth, float halfHeight)
     {
@@ -63,11 +71,26 @@ internal static class ModalUiStyling
 
     public static void StyleButton(Button button)
     {
-        button.AddThemeStyleboxOverride("normal", CreateButtonStyle(ButtonBackground, PanelBorder, 2));
-        button.AddThemeStyleboxOverride("hover", CreateButtonStyle(ButtonHoverBackground, FocusBorder, 2));
-        button.AddThemeStyleboxOverride("pressed", CreateButtonStyle(ButtonPressedBackground, FocusBorder, 2));
+        ApplyButtonStyle(button, ButtonBackground, ButtonHoverBackground, ButtonPressedBackground, PanelBorder);
+    }
+
+    public static void StylePrimaryButton(Button button)
+    {
+        ApplyButtonStyle(button, PrimaryBackground, PrimaryHoverBackground, PrimaryPressedBackground, new Color(0.05f, 0.20f, 0.23f, 1f));
+    }
+
+    public static void StyleDangerButton(Button button)
+    {
+        ApplyButtonStyle(button, DangerBackground, DangerHoverBackground, DangerPressedBackground, new Color(0.22f, 0.06f, 0.04f, 1f));
+    }
+
+    private static void ApplyButtonStyle(Button button, Color background, Color hoverBackground, Color pressedBackground, Color border)
+    {
+        button.AddThemeStyleboxOverride("normal", CreateButtonStyle(background, border, 2));
+        button.AddThemeStyleboxOverride("hover", CreateButtonStyle(hoverBackground, FocusBorder, 2));
+        button.AddThemeStyleboxOverride("pressed", CreateButtonStyle(pressedBackground, FocusBorder, 2));
         button.AddThemeStyleboxOverride("focus", CreateButtonStyle(new Color(0f, 0f, 0f, 0f), FocusBorder, 3));
-        button.AddThemeStyleboxOverride("disabled", CreateButtonStyle(new Color(0.08f, 0.08f, 0.08f, 0.7f), PanelBorder, 1));
+        button.AddThemeStyleboxOverride("disabled", CreateButtonStyle(new Color(0.08f, 0.08f, 0.08f, 0.7f), border, 1));
         button.AddThemeColorOverride("font_color", BodyText);
         button.AddThemeColorOverride("font_hover_color", BodyText);
         button.AddThemeColorOverride("font_pressed_color", BodyText);
@@ -85,7 +108,12 @@ internal static class ModalUiStyling
 
     public static void StyleBadgePanel(PanelContainer panel)
     {
-        panel.AddThemeStyleboxOverride("panel", CreateButtonStyle(ButtonBackground, PanelBorder, 2));
+        panel.AddThemeStyleboxOverride("panel", CreateBadgeStyle());
+    }
+
+    public static void StyleIconSlotPanel(PanelContainer panel)
+    {
+        panel.AddThemeStyleboxOverride("panel", CreateTransparentStyle());
     }
 
     public static void StylePreviewFrame(PanelContainer panel)
@@ -109,12 +137,12 @@ internal static class ModalUiStyling
             BgColor = PanelBackground,
             BorderColor = PanelBorder,
             ShadowColor = new Color(0f, 0f, 0f, 0.65f),
-            ShadowSize = 18,
+            ShadowSize = 22,
             ShadowOffset = new Vector2(0, 8)
         };
         style.SetBorderWidthAll(3);
-        style.SetCornerRadiusAll(8);
-        style.SetContentMarginAll(22);
+        style.SetCornerRadiusAll(GetCardCornerRadius());
+        style.SetContentMarginAll(20);
         return style;
     }
 
@@ -126,8 +154,34 @@ internal static class ModalUiStyling
             BorderColor = border
         };
         style.SetBorderWidthAll(borderWidth);
-        style.SetCornerRadiusAll(6);
+        style.SetCornerRadiusAll(GetCardCornerRadius());
         style.SetContentMarginAll(10);
+        return style;
+    }
+
+    private static StyleBoxFlat CreateBadgeStyle()
+    {
+        var style = new StyleBoxFlat
+        {
+            BgColor = ButtonBackground,
+            BorderColor = PanelBorder
+        };
+        style.SetBorderWidthAll(2);
+        style.SetCornerRadiusAll(GetCardCornerRadius());
+        style.SetContentMarginAll(0);
+        return style;
+    }
+
+    private static StyleBoxFlat CreateTransparentStyle()
+    {
+        var style = new StyleBoxFlat
+        {
+            BgColor = new Color(0f, 0f, 0f, 0f),
+            BorderColor = new Color(0f, 0f, 0f, 0f)
+        };
+        style.SetBorderWidthAll(0);
+        style.SetCornerRadiusAll(0);
+        style.SetContentMarginAll(0);
         return style;
     }
 }

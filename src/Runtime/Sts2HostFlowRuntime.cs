@@ -33,6 +33,26 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
             .Select(TryRepairPayloadCharacterMetadata)
             .ToList();
 
+    public IReadOnlyList<ArchivedCampaign> ListArchivedCampaigns(MultiplayerGameMode gameMode) =>
+        _bank.ListArchivedCampaigns(gameMode);
+
+    public bool HasDeletedCampaigns() => _bank.HasDeletedCampaigns();
+
+    public void ArchiveCampaign(string campaignId, DateTimeOffset deletedAtUtc) =>
+        _bank.ArchiveCampaign(campaignId, deletedAtUtc);
+
+    public CampaignMetadata RestoreArchivedCampaign(string archiveKey) =>
+        _bank.RestoreArchivedCampaign(archiveKey);
+
+    public void DeleteCampaign(string campaignId) =>
+        _bank.DeleteCampaign(campaignId);
+
+    public void DeleteArchivedCampaign(string archiveKey) =>
+        _bank.DeleteArchivedCampaign(archiveKey);
+
+    public void ClearDeletedCampaigns() =>
+        _bank.ClearDeletedCampaigns();
+
     private CampaignMetadata TryRepairPayloadCharacterMetadata(CampaignMetadata metadata)
     {
         if (!metadata.Roster.Any(player => string.IsNullOrWhiteSpace(player.SelectedCharacterId)))
@@ -243,7 +263,10 @@ public static class Sts2HostFlowRuntime
         var metadataExtractor = new Sts2CampaignMetadataExtractor();
         return new HostFlowController(
             new Sts2SaveBankAdapter(bank),
-            new ActiveSaveReplacementGuard(paths.ActiveSavePath, paths.ActiveStatePath),
+            new ActiveSaveReplacementGuard(
+                paths.ActiveSavePath,
+                paths.ActiveStatePath,
+                campaignId => HasStoredCampaignPayload(bank, campaignId)),
             new DelegateActiveSaveActivator(switcher.Activate, switcher.RestorePreviousActive),
             new Sts2HostFlowContinuation(hostSubmenu),
             new ActiveSaveRecoveryService(
@@ -322,17 +345,25 @@ public static class Sts2HostFlowRuntime
 
     public static void ShowPicker(HostFlowController controller, MultiplayerGameMode gameMode) =>
         MultiplayerSavePickerModal.Show(controller, gameMode);
+
+    private static bool HasStoredCampaignPayload(MultiplayerSaveBank bank, string campaignId) =>
+        File.Exists(bank.GetPayloadPath(campaignId));
 }
 
 public sealed class ActiveSaveReplacementGuard : IActiveSavePreflight
 {
     private readonly string _activeSavePath;
     private readonly string _statePath;
+    private readonly Func<string, bool>? _hasStoredCampaignPayload;
 
-    public ActiveSaveReplacementGuard(string activeSavePath, string statePath)
+    public ActiveSaveReplacementGuard(
+        string activeSavePath,
+        string statePath,
+        Func<string, bool>? hasStoredCampaignPayload = null)
     {
         _activeSavePath = activeSavePath;
         _statePath = statePath;
+        _hasStoredCampaignPayload = hasStoredCampaignPayload;
     }
 
     public OperationResult EnsureActiveSaveCanBeReplaced()
@@ -349,11 +380,18 @@ public sealed class ActiveSaveReplacementGuard : IActiveSavePreflight
 
             var state = JsonFile.Read<ActiveSaveState>(_statePath);
             var currentActiveChecksum = FileChecksum.Sha256(_activeSavePath);
-            return currentActiveChecksum == state.ActiveChecksumAfterActivation
-                ? OperationResult.Ok()
-                : OperationResult.Fail("Active save has unsynced changes");
+            if (currentActiveChecksum == state.ActiveChecksumAfterActivation)
+                return OperationResult.Ok();
+
+            if (_hasStoredCampaignPayload is not null &&
+                !_hasStoredCampaignPayload(state.CampaignId))
+            {
+                return OperationResult.Ok();
+            }
+
+            return OperationResult.Fail("Active save has unsynced changes");
         }
-        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException or ArgumentException)
         {
             return OperationResult.Fail($"Active save state cannot be verified: {ex.Message}");
         }

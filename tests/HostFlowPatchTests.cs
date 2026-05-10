@@ -24,7 +24,13 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal maps native character icon paths", PickerModalMapsNativeCharacterIconPaths);
         yield return new TestCase("picker modal exposes badge fallback helper", PickerModalExposesBadgeFallbackHelper);
         yield return new TestCase("picker modal constrains character icon texture size", PickerModalConstrainsCharacterIconTextureSize);
+        yield return new TestCase("picker modal wraps character indicators in fixed slot", PickerModalWrapsCharacterIndicatorsInFixedSlot);
         yield return new TestCase("picker modal exposes split panel helpers", PickerModalExposesSplitPanelHelpers);
+        yield return new TestCase("picker modal exposes archive management helpers", PickerModalExposesArchiveManagementHelpers);
+        yield return new TestCase("picker modal exposes active and archived save action helpers", PickerModalExposesSaveActionHelpers);
+        yield return new TestCase("picker modal exposes quick polish layout constants", PickerModalExposesQuickPolishLayoutConstants);
+        yield return new TestCase("modal styling exposes action button variants", ModalStylingExposesActionButtonVariants);
+        yield return new TestCase("modal styling exposes rounded card radius", ModalStylingExposesRoundedCardRadius);
         yield return new TestCase("recovery modal exposes explicit UI builder", RecoveryModalExposesExplicitUiBuilder);
         yield return new TestCase("RMP host compatibility opens picker before direct host", RmpHostCompatibilityOpensPickerBeforeDirectHost);
         yield return new TestCase("RMP host compatibility resumes original host handler", RmpHostCompatibilityResumesOriginalHostHandler);
@@ -262,6 +268,25 @@ public static class HostFlowPatchTests
         AssertEx.Equal("Godot.TextureRect", createCharacterIconTextureRect.ReturnType.FullName);
     }
 
+    private static void PickerModalWrapsCharacterIndicatorsInFixedSlot()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var getCharacterIconSize = modalType!.GetMethod("GetCharacterIconSize", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("GetCharacterIconSize helper was not found");
+        var createCharacterIconSlot = modalType.GetMethod("CreateCharacterIconSlot", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("CreateCharacterIconSlot helper was not found");
+        var createCharacterIndicator = modalType.GetMethod("CreateCharacterIndicator", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("CreateCharacterIndicator helper was not found");
+
+        var iconSize = getCharacterIconSize.Invoke(null, [])!;
+
+        AssertEx.Equal("Godot.PanelContainer", createCharacterIconSlot.ReturnType.FullName);
+        AssertEx.Equal("Godot.Control", createCharacterIndicator.ReturnType.FullName);
+        AssertEx.Equal(42f, GetVector2Component(iconSize, "X"));
+        AssertEx.Equal(42f, GetVector2Component(iconSize, "Y"));
+    }
+
     private static float GetVector2Component(object vector, string name)
     {
         var type = vector.GetType();
@@ -280,9 +305,12 @@ public static class HostFlowPatchTests
         {
             "BuildCampaignList",
             "BuildPreviewPanel",
+            "CreateCampaignListFrame",
+            "CreatePreviewContent",
             "SelectCampaignPreview",
             "ContinueSelectedCampaign",
             "CreatePreviewSectionTitle",
+            "CreateRosterPreviewRow",
             "CreatePreviewFrame",
             "SetSelectedCampaignButton"
         })
@@ -290,6 +318,108 @@ public static class HostFlowPatchTests
             var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
             AssertEx.True(method is not null, $"{methodName} helper was not found");
         }
+    }
+
+    private static void PickerModalExposesArchiveManagementHelpers()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+
+        foreach (var methodName in new[]
+        {
+            "ShowArchives",
+            "ShowArchiveConfirmation",
+            "ShowActiveDeleteConfirmation",
+            "ShowArchivedDeleteConfirmation",
+            "ShowDeleteAllArchivesConfirmation",
+            "ArchiveSelectedCampaign",
+            "DeleteSelectedCampaign",
+            "RestoreSelectedArchive",
+            "DeleteSelectedArchive",
+            "ClearDeletedCampaigns",
+            "RefreshPicker"
+        })
+        {
+            var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+    }
+
+    private static void PickerModalExposesSaveActionHelpers()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+
+        foreach (var methodName in new[]
+        {
+            "BuildActiveFooterActions",
+            "BuildArchiveFooterActions",
+            "CreateFooterContinueButton",
+            "CreateActiveCampaignActions",
+            "CreateArchivedCampaignActions",
+            "SetSelectedCampaignActionsEnabled"
+        })
+        {
+            var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+    }
+
+    private static void PickerModalExposesQuickPolishLayoutConstants()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+
+        var campaignFrameWidth = InvokePrivateFloat(modalType!, "GetCampaignListFrameWidth");
+        var campaignRowWidth = InvokePrivateFloat(modalType!, "GetCampaignListRowWidth");
+        var previewFrameWidth = InvokePrivateFloat(modalType!, "GetPreviewFrameWidth");
+        var previewContentWidth = InvokePrivateFloat(modalType!, "GetPreviewContentWidth");
+        var actionButtonWidth = InvokePrivateFloat(modalType!, "GetActionButtonWidth");
+
+        AssertEx.True(campaignFrameWidth < previewFrameWidth, "Campaign list should be narrower than preview");
+        AssertEx.True(campaignFrameWidth >= 390f, "Campaign list should stay readable");
+        AssertEx.True(previewFrameWidth >= 520f, "Preview should have room for party and run details");
+        AssertEx.True(campaignRowWidth < campaignFrameWidth, "Campaign rows need inner frame padding");
+        AssertEx.True(previewContentWidth < previewFrameWidth, "Preview content needs inner frame padding");
+        AssertEx.True(actionButtonWidth >= 190f, "Action buttons should share a stable readable width");
+        AssertEx.True(
+            Math.Abs((campaignFrameWidth / (campaignFrameWidth + previewFrameWidth)) - 0.43f) <= 0.02f,
+            "Campaign and preview widths should approximate the approved 43/57 split");
+    }
+
+    private static void ModalStylingExposesActionButtonVariants()
+    {
+        var stylingType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.ModalUiStyling");
+        AssertEx.True(stylingType is not null);
+
+        foreach (var methodName in new[]
+        {
+            "StylePrimaryButton",
+            "StyleDangerButton"
+        })
+        {
+            var method = stylingType!.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+    }
+
+    private static void ModalStylingExposesRoundedCardRadius()
+    {
+        var stylingType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.ModalUiStyling");
+        AssertEx.True(stylingType is not null);
+        var radius = (int)(stylingType!.GetMethod("GetCardCornerRadius", BindingFlags.Static | BindingFlags.Public)
+            ?? throw new InvalidOperationException("GetCardCornerRadius helper was not found"))
+            .Invoke(null, [])!;
+
+        AssertEx.True(radius >= 10, "Cards and buttons should be more rounded than the previous square-ish pass");
+        AssertEx.True(radius <= 14, "Cards and buttons should not become pill-shaped");
+    }
+
+    private static float InvokePrivateFloat(Type type, string methodName)
+    {
+        var method = type.GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"{methodName} helper was not found");
+        return Convert.ToSingle(method.Invoke(null, [])!);
     }
 
     private static void RecoveryModalExposesExplicitUiBuilder()

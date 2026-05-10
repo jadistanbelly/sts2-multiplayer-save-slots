@@ -78,6 +78,11 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
             if (activeChecksum == state.ActiveChecksumAfterActivation)
                 return ActiveSaveRecoveryModel.None();
 
+            if (!HasStoredCampaignPayload(state.CampaignId))
+                return ActiveSaveRecoveryModel.None();
+
+            EnsureStoredCampaignCanSync(state);
+
             return new ActiveSaveRecoveryModel(
                 "Active multiplayer save has unsynced changes",
                 "Sync the active save back to its selected campaign before switching slots.",
@@ -93,10 +98,19 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
             Console.Error.WriteLine($"[MultiplayerSaveSlots] Active save path safety check failed: {ex.Message}");
             return ActiveSaveRecoveryModel.None();
         }
-        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException or ArgumentException)
         {
             return DuplicateModel($"Active save state cannot be verified: {ex.Message}");
         }
+    }
+
+    private bool HasStoredCampaignPayload(string campaignId) =>
+        File.Exists(_bank.GetPayloadPath(campaignId));
+
+    private void EnsureStoredCampaignCanSync(ActiveSaveState state)
+    {
+        _bank.GetCampaign(state.CampaignId);
+        _bank.EnsureCampaignIndexed(state.CampaignId);
     }
 
     public OperationResult Recover(ActiveSaveRecoveryActionKind action, MultiplayerGameMode gameMode, DateTimeOffset nowUtc)
