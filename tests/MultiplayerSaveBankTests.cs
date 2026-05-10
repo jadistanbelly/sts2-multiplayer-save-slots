@@ -10,6 +10,8 @@ public static class MultiplayerSaveBankTests
         tests.Add(new TestCase("save bank creates campaign with payload and metadata", CreatesCampaign));
         tests.Add(new TestCase("save bank lists campaigns by gamemode", ListsByGameMode));
         tests.Add(new TestCase("save bank persists metadata contents and json", PersistsMetadataContentsAndJson));
+        tests.Add(new TestCase("save bank renames campaign with normalized custom name", RenamesCampaignWithNormalizedCustomName));
+        tests.Add(new TestCase("save bank reads old metadata without custom name", ReadsOldMetadataWithoutCustomName));
         tests.Add(new TestCase("save bank writes created id once in index", WritesCreatedIdOnceInIndex));
         tests.Add(new TestCase("save bank payload checksum matches copied payload", PayloadChecksumMatchesCopiedPayload));
         tests.Add(new TestCase("save bank lists same mode by last played descending", ListsSameModeByLastPlayedDescending));
@@ -105,6 +107,69 @@ public static class MultiplayerSaveBankTests
         AssertEx.Equal(FileChecksum.Sha256(paths.PayloadPath(metadata.CampaignId)), roundTrip.PayloadChecksum);
         AssertEx.Equal(null, roundTrip.ActiveChecksum);
         AssertEx.Equal("Floor 18", roundTrip.ActOrFloor);
+    }
+
+    private static void RenamesCampaignWithNormalizedCustomName()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [new PlayerIdentity("steam:1", "phatstatss"), new PlayerIdentity("steam:2", "Magical Crocs")],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.Parse("2026-05-10T12:00:00Z"),
+            "Floor 5"));
+
+        var renamed = bank.RenameCampaign(metadata.CampaignId, "  Friday Poison Run  ");
+
+        AssertEx.Equal("Friday Poison Run", renamed.CustomName);
+        AssertEx.Equal("phatstatss, Magical Crocs", renamed.Label);
+        var roundTrip = bank.GetCampaign(metadata.CampaignId);
+        AssertEx.Equal("Friday Poison Run", roundTrip.CustomName);
+        AssertEx.Equal("phatstatss, Magical Crocs", roundTrip.Label);
+
+        var cleared = bank.RenameCampaign(metadata.CampaignId, "   ");
+        AssertEx.Equal(null, cleared.CustomName);
+        AssertEx.Equal("phatstatss, Magical Crocs", cleared.Label);
+    }
+
+    private static void ReadsOldMetadataWithoutCustomName()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [new PlayerIdentity("steam:1", "phatstatss")],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.Parse("2026-05-10T12:00:00Z")));
+
+        var jsonWithoutCustomName = """
+            {
+              "campaignId": "__ID__",
+              "gameMode": "Standard",
+              "label": "phatstatss",
+              "roster": [
+                {
+                  "stableId": "steam:1",
+                  "displayName": "phatstatss",
+                  "selectedCharacterId": null
+                }
+              ],
+              "createdAtUtc": "2026-05-10T12:00:00+00:00",
+              "lastPlayedAtUtc": "2026-05-10T12:00:00+00:00",
+              "activeChecksum": null,
+              "payloadChecksum": "payload",
+              "actOrFloor": null
+            }
+            """.Replace("__ID__", metadata.CampaignId, StringComparison.Ordinal);
+        File.WriteAllText(paths.MetadataPath(metadata.CampaignId), jsonWithoutCustomName);
+
+        var roundTrip = bank.GetCampaign(metadata.CampaignId);
+
+        AssertEx.Equal(null, roundTrip.CustomName);
+        AssertEx.Equal("phatstatss", roundTrip.Label);
     }
 
     private static void WritesCreatedIdOnceInIndex()

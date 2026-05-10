@@ -9,4 +9,5 @@ public sealed record CampaignMetadata(
     DateTimeOffset LastPlayedAtUtc,
     string? ActiveChecksum,
     string? PayloadChecksum,
-    string? ActOrFloor);
+    string? ActOrFloor,
+    string? CustomName = null);

@@ -104,6 +104,15 @@ public sealed class MultiplayerSaveBank
         JsonFile.Write(_paths.MetadataPath(metadata.CampaignId), metadata);
     }
 
+    public CampaignMetadata RenameCampaign(string campaignId, string? customName)
+    {
+        var metadata = GetCampaign(campaignId);
+        EnsureCampaignIndexed(campaignId);
+        var updated = metadata with { CustomName = NormalizeCustomName(customName) };
+        UpdateMetadata(updated);
+        return updated;
+    }
+
     public string ArchiveCampaign(string campaignId, DateTimeOffset deletedAtUtc)
     {
         EnsureCampaignIndexed(campaignId);
@@ -244,6 +253,14 @@ public sealed class MultiplayerSaveBank
 
     private static CampaignIndex NormalizeIndex(CampaignIndex index) =>
         new(index.CampaignIds.Distinct(StringComparer.Ordinal).ToList());
+
+    private static string? NormalizeCustomName(string? customName)
+    {
+        if (string.IsNullOrWhiteSpace(customName))
+            return null;
+
+        return customName.Trim();
+    }
 
     private void WriteIndex(IEnumerable<string> campaignIds) =>
         WriteIndexFile(new CampaignIndex(campaignIds.Distinct(StringComparer.Ordinal).ToList()));
