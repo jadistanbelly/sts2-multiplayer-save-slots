@@ -12,6 +12,7 @@ internal static class ModalUiStyling
     private static readonly Color FocusBorder = new(0.97f, 0.78f, 0.26f, 1f);
     private static readonly Color TitleText = new(0.96f, 0.78f, 0.30f, 1f);
     private static readonly Color BodyText = new(0.98f, 0.94f, 0.84f, 1f);
+    private static readonly Color PreviewBackground = new(0.10f, 0.06f, 0.045f, 0.92f);
 
     public static void PrepareModalRoot(Control root)
     {
@@ -73,6 +74,32 @@ internal static class ModalUiStyling
         button.AddThemeColorOverride("font_focus_color", BodyText);
         button.AddThemeFontSizeOverride("font_size", 22);
         button.FocusMode = Control.FocusModeEnum.All;
+    }
+
+    public static void StyleSelectedButton(Button button)
+    {
+        StyleButton(button);
+        button.AddThemeStyleboxOverride("normal", CreateButtonStyle(ButtonBackground, FocusBorder, 3));
+        button.AddThemeColorOverride("font_color", BodyText);
+    }
+
+    public static void StyleBadgePanel(PanelContainer panel)
+    {
+        panel.AddThemeStyleboxOverride("panel", CreateButtonStyle(ButtonBackground, PanelBorder, 2));
+    }
+
+    public static void StylePreviewFrame(PanelContainer panel)
+    {
+        panel.AddThemeStyleboxOverride("panel", CreateButtonStyle(PreviewBackground, PanelBorder, 2));
+    }
+
+    public static void StyleSectionTitle(Label label)
+    {
+        label.AddThemeColorOverride("font_color", TitleText);
+        label.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.35f));
+        label.AddThemeConstantOverride("shadow_offset_x", 2);
+        label.AddThemeConstantOverride("shadow_offset_y", 1);
+        label.AddThemeFontSizeOverride("font_size", 20);
     }
 
     private static StyleBoxFlat CreatePanelStyle()

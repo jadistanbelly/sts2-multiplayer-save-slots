@@ -14,8 +14,15 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session tracks pending new run", SessionTracksPendingNewRun);
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
+        yield return new TestCase("STS2 save bank adapter repairs listed campaign character ids from payload", SaveBankAdapterRepairsListedCampaignCharacterIdsFromPayload);
+        yield return new TestCase("picker model exposes default selected campaign", PickerModelExposesDefaultSelectedCampaign);
+        yield return new TestCase("picker model describes empty campaign list", PickerModelDescribesEmptyCampaignList);
+        yield return new TestCase("picker character badge labels are stable", PickerCharacterBadgeLabelsAreStable);
+        yield return new TestCase("picker roster entries use player badge fallback", PickerRosterEntriesUsePlayerBadgeFallback);
+        yield return new TestCase("controller disambiguates duplicate picker rows", ControllerDisambiguatesDuplicatePickerRows);
         yield return new TestCase("picker subtitle omits unknown progress", PickerSubtitleOmitsUnknownProgress);
         yield return new TestCase("picker campaign row includes full details", PickerCampaignRowIncludesFullDetails);
+        yield return new TestCase("picker details show selected characters", PickerDetailsShowSelectedCharacters);
         yield return new TestCase("picker details handle missing progress and roster", PickerDetailsHandleMissingProgressAndRoster);
         yield return new TestCase("picker start new row has no details", PickerStartNewRowHasNoDetails);
         yield return new TestCase("compatibility checker allows matching stable ids", CompatibilityCheckerAllowsMatchingStableIds);
@@ -160,6 +167,156 @@ public static class HostFlowControllerTests
         AssertEx.Equal("Floor 7 - 2 players", model.Rows[1].Subtitle);
     }
 
+    private static void SaveBankAdapterRepairsListedCampaignCharacterIdsFromPayload()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        File.WriteAllText(
+            source,
+            "{\"platform_type\":\"steam\",\"players\":[{\"net_id\":111,\"character_id\":\"CHARACTER.SILENT\"},{\"net_id\":222,\"character_id\":\"CHARACTER.IRONCLAD\"}]}");
+        var bank = new Storage.MultiplayerSaveBank(new Storage.SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [new PlayerIdentity("Steam:111", "Alice"), new PlayerIdentity("Steam:222", "Bob")],
+            source,
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            "Floor 5"));
+        var adapter = new Sts2SaveBankAdapter(bank);
+
+        var campaigns = adapter.ListCampaigns(MultiplayerGameMode.Standard);
+
+        AssertEx.Equal(1, campaigns.Count);
+        AssertEx.Equal(metadata.CampaignId, campaigns[0].CampaignId);
+        AssertEx.Equal("CHARACTER.SILENT", campaigns[0].Roster[0].SelectedCharacterId);
+        AssertEx.Equal("CHARACTER.IRONCLAD", campaigns[0].Roster[1].SelectedCharacterId);
+        AssertEx.Equal("CHARACTER.SILENT", bank.GetCampaign(metadata.CampaignId).Roster[0].SelectedCharacterId);
+    }
+
+    private static void PickerModelExposesDefaultSelectedCampaign()
+    {
+        var model = new MultiplayerSavePickerModel(
+            MultiplayerGameMode.Standard,
+            [
+                MultiplayerSavePickerRow.StartNew(),
+                MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    MultiplayerGameMode.Standard,
+                    "Alice, Bob",
+                    [new PlayerIdentity("steam:1", "Alice"), new PlayerIdentity("steam:2", "Bob")],
+                    DateTimeOffset.Parse("2026-05-09T20:00:00Z"),
+                    DateTimeOffset.Parse("2026-05-09T20:30:00Z"),
+                    null,
+                    "checksum",
+                    "Floor 3"))
+            ]);
+
+        var campaignRowsProperty = typeof(MultiplayerSavePickerModel).GetProperty("CampaignRows")
+            ?? throw new InvalidOperationException("CampaignRows helper was not found");
+        var defaultSelectedProperty = typeof(MultiplayerSavePickerModel).GetProperty("DefaultSelectedCampaign")
+            ?? throw new InvalidOperationException("DefaultSelectedCampaign helper was not found");
+
+        var campaignRows = (IReadOnlyList<MultiplayerSavePickerRow>)campaignRowsProperty.GetValue(model)!;
+        var defaultSelected = (MultiplayerSavePickerRow?)defaultSelectedProperty.GetValue(model);
+
+        AssertEx.Equal(1, campaignRows.Count);
+        AssertEx.Equal("Alice, Bob", campaignRows[0].Title);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", defaultSelected?.CampaignId);
+    }
+
+    private static void PickerModelDescribesEmptyCampaignList()
+    {
+        var model = new MultiplayerSavePickerModel(MultiplayerGameMode.Standard, [MultiplayerSavePickerRow.StartNew()]);
+        var campaignRowsProperty = typeof(MultiplayerSavePickerModel).GetProperty("CampaignRows")
+            ?? throw new InvalidOperationException("CampaignRows helper was not found");
+        var defaultSelectedProperty = typeof(MultiplayerSavePickerModel).GetProperty("DefaultSelectedCampaign")
+            ?? throw new InvalidOperationException("DefaultSelectedCampaign helper was not found");
+        var emptyTitleProperty = typeof(MultiplayerSavePickerModel).GetProperty("EmptyPreviewTitle")
+            ?? throw new InvalidOperationException("EmptyPreviewTitle helper was not found");
+        var emptyBodyProperty = typeof(MultiplayerSavePickerModel).GetProperty("EmptyPreviewBody")
+            ?? throw new InvalidOperationException("EmptyPreviewBody helper was not found");
+
+        var campaignRows = (IReadOnlyList<MultiplayerSavePickerRow>)campaignRowsProperty.GetValue(model)!;
+        var defaultSelected = (MultiplayerSavePickerRow?)defaultSelectedProperty.GetValue(model);
+
+        AssertEx.Equal(0, campaignRows.Count);
+        AssertEx.Equal(null, defaultSelected);
+        AssertEx.Equal("No saved runs", emptyTitleProperty.GetValue(null));
+        AssertEx.Equal("Start a new multiplayer run to create the first save slot.", emptyBodyProperty.GetValue(null));
+    }
+
+    private static void PickerCharacterBadgeLabelsAreStable()
+    {
+        var badgeText = typeof(MultiplayerSavePickerModel).GetMethod("CharacterBadgeText")
+            ?? throw new InvalidOperationException("CharacterBadgeText helper was not found");
+
+        AssertEx.Equal("IC", badgeText.Invoke(null, ["CHARACTER.IRONCLAD"]));
+        AssertEx.Equal("SI", badgeText.Invoke(null, ["CHARACTER.SILENT"]));
+        AssertEx.Equal("DE", badgeText.Invoke(null, ["CHARACTER.DEFECT"]));
+        AssertEx.Equal("NE", badgeText.Invoke(null, ["CHARACTER.NECROBINDER"]));
+        AssertEx.Equal("RG", badgeText.Invoke(null, ["CHARACTER.REGENT"]));
+        AssertEx.Equal("??", badgeText.Invoke(null, ["CHARACTER.UNKNOWN"]));
+        AssertEx.Equal("??", badgeText.Invoke(null, [null]));
+    }
+
+    private static void PickerRosterEntriesUsePlayerBadgeFallback()
+    {
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard,
+            "Alice",
+            [new PlayerIdentity("Steam:1", "Alice")],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            null,
+            "checksum",
+            "Floor 1"));
+
+        var details = row.Details ?? throw new InvalidOperationException("Expected campaign details");
+        AssertEx.Equal("A", details.RosterEntries[0].BadgeText);
+    }
+
+    private static void ControllerDisambiguatesDuplicatePickerRows()
+    {
+        var roster = new[]
+        {
+            new PlayerIdentity("steam:1", "phatstatss"),
+            new PlayerIdentity("steam:2", "Magical Crocs")
+        };
+        var bank = new FakeHostFlowSaveBank
+        {
+            Campaigns =
+            [
+                new CampaignMetadata(
+                    "11111111111111111111111111111111",
+                    MultiplayerGameMode.Standard,
+                    "phatstatss, Magical Crocs",
+                    roster,
+                    DateTimeOffset.Parse("2026-05-09T20:58:00Z"),
+                    DateTimeOffset.Parse("2026-05-09T21:10:00Z"),
+                    null,
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "Floor 3"),
+                new CampaignMetadata(
+                    "22222222222222222222222222222222",
+                    MultiplayerGameMode.Standard,
+                    "phatstatss, Magical Crocs",
+                    roster,
+                    DateTimeOffset.Parse("2026-05-09T21:24:00Z"),
+                    DateTimeOffset.Parse("2026-05-09T21:30:00Z"),
+                    null,
+                    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "Floor 3")
+            ]
+        };
+
+        var model = CreateController(bank).BuildPickerModel(MultiplayerGameMode.Standard);
+
+        AssertEx.Equal("Floor 3 - 2 players - ID 11111111", model.Rows[1].Subtitle);
+        AssertEx.Equal("Floor 3 - 2 players - ID 22222222", model.Rows[2].Subtitle);
+        AssertEx.Equal("Floor 3 - 2 players - ID 11111111", model.Rows[1].Details?.Subtitle);
+        AssertEx.Equal("Floor 3 - 2 players - ID 22222222", model.Rows[2].Details?.Subtitle);
+    }
+
     private static void PickerSubtitleOmitsUnknownProgress()
     {
         var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
@@ -204,17 +361,40 @@ public static class HostFlowControllerTests
 
         AssertEx.Equal("buddy1, buddy2 +2", details.Title);
         AssertEx.Equal("Floor 18 - 4 players", details.Subtitle);
-        AssertEx.Equal(5, details.SummaryLines.Count);
+        AssertEx.Equal(6, details.SummaryLines.Count);
         AssertEx.Equal("Progress: Floor 18", details.SummaryLines[0]);
         AssertEx.Equal("Players: 4", details.SummaryLines[1]);
         AssertEx.Equal("Created: 2026-05-08 00:00 UTC", details.SummaryLines[2]);
         AssertEx.Equal("Last played: 2026-05-08 01:30 UTC", details.SummaryLines[3]);
-        AssertEx.Equal("Campaign id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", details.SummaryLines[4]);
+        AssertEx.Equal("Campaign id: aaaaaaaa", details.SummaryLines[4]);
+        AssertEx.Equal("Save fingerprint: checksum", details.SummaryLines[5]);
         AssertEx.Equal(4, details.RosterLines.Count);
         AssertEx.Equal("1. buddy1", details.RosterLines[0]);
         AssertEx.Equal("2. buddy2", details.RosterLines[1]);
         AssertEx.Equal("3. buddy3", details.RosterLines[2]);
         AssertEx.Equal("4. buddy4", details.RosterLines[3]);
+    }
+
+    private static void PickerDetailsShowSelectedCharacters()
+    {
+        var constructor = typeof(PlayerIdentity).GetConstructor([typeof(string), typeof(string), typeof(string)]);
+        AssertEx.True(constructor is not null, "PlayerIdentity should capture a selected character id");
+        var player = (PlayerIdentity)constructor!.Invoke(["steam:1", "phatstatss", "CHARACTER.IRONCLAD"]);
+
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "cccccccccccccccccccccccccccccccc",
+            MultiplayerGameMode.Standard,
+            "phatstatss",
+            [player],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T01:30:00Z"),
+            null,
+            "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+            "Floor 18"));
+
+        var details = row.Details ?? throw new InvalidOperationException("Expected campaign details");
+
+        AssertEx.Equal("1. phatstatss - The Ironclad", details.RosterLines[0]);
     }
 
     private static void PickerDetailsHandleMissingProgressAndRoster()

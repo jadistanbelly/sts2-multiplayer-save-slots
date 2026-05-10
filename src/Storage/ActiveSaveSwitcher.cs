@@ -1,3 +1,5 @@
+using MultiplayerSaveSlots.Core;
+
 namespace MultiplayerSaveSlots.Storage;
 
 public sealed class ActiveSaveSwitcher
@@ -13,8 +15,11 @@ public sealed class ActiveSaveSwitcher
         _statePath = statePath;
     }
 
+    public void EnsureCanUseRuntimePaths() => EnsureRuntimePathsSafe();
+
     public void Activate(string campaignId, DateTimeOffset nowUtc)
     {
+        EnsureRuntimePathsSafe();
         var payloadPath = _bank.GetPayloadPath(campaignId);
         if (!File.Exists(payloadPath))
             throw new FileNotFoundException("Campaign payload is missing", payloadPath);
@@ -66,10 +71,13 @@ public sealed class ActiveSaveSwitcher
 
     public void RestorePreviousActive(DateTimeOffset nowUtc)
     {
+        EnsureRuntimePathsSafe();
         if (!File.Exists(_statePath))
             throw new InvalidOperationException("Cannot restore active save without active campaign state");
 
         var state = JsonFile.Read<ActiveSaveState>(_statePath);
+        EnsureStateBackupPathSafe(state.CampaignId, state.PreviousActiveBackupPath, "previous active save backup");
+        EnsureStateBackupPathSafe(state.CampaignId, state.PreviousStateBackupPath, "previous active state backup");
         if (state.PreviousActiveBackupPath is not null && !File.Exists(state.PreviousActiveBackupPath))
             throw new FileNotFoundException("Previous active save backup is missing", state.PreviousActiveBackupPath);
 
@@ -114,6 +122,7 @@ public sealed class ActiveSaveSwitcher
 
     public void ClaimActiveSave(string campaignId, DateTimeOffset nowUtc)
     {
+        EnsureRuntimePathsSafe();
         if (!File.Exists(_activeSavePath))
             throw new FileNotFoundException("Active multiplayer save is missing", _activeSavePath);
 
@@ -149,8 +158,12 @@ public sealed class ActiveSaveSwitcher
         });
     }
 
-    public void SyncBack(DateTimeOffset nowUtc, string? actOrFloor = null)
+    public void SyncBack(
+        DateTimeOffset nowUtc,
+        string? actOrFloor = null,
+        IReadOnlyList<PlayerIdentity>? capturedRoster = null)
     {
+        EnsureRuntimePathsSafe();
         if (!File.Exists(_statePath))
             throw new InvalidOperationException("Cannot sync active save without active campaign state");
 
@@ -180,13 +193,83 @@ public sealed class ActiveSaveSwitcher
         File.Copy(_activeSavePath, payloadPath, overwrite: true);
         var syncedPayloadChecksum = FileChecksum.Sha256(payloadPath);
         JsonFile.Write(_statePath, state with { ActiveChecksumAfterActivation = syncedPayloadChecksum });
+        var refreshedRoster = RefreshRoster(metadata.Roster, capturedRoster);
 
         _bank.UpdateMetadata(metadata with
         {
             ActiveChecksum = FileChecksum.Sha256(_activeSavePath),
             PayloadChecksum = syncedPayloadChecksum,
             LastPlayedAtUtc = nowUtc,
-            ActOrFloor = actOrFloor ?? metadata.ActOrFloor
+            ActOrFloor = actOrFloor ?? metadata.ActOrFloor,
+            Roster = refreshedRoster,
+            Label = CampaignLabeler.Build(refreshedRoster)
         });
     }
+
+    private void EnsureRuntimePathsSafe()
+    {
+        var activeSaveDirectory = Path.GetDirectoryName(Path.GetFullPath(_activeSavePath))
+            ?? Directory.GetCurrentDirectory();
+        StoragePathGuard.EnsureSafeDirectoryPath(activeSaveDirectory, "active save directory");
+        StoragePathGuard.EnsureSafeFilePath(_activeSavePath, "active save path");
+        StoragePathGuard.EnsurePathInsideDirectory(_bank.RootDirectory, activeSaveDirectory, "save bank root");
+        _bank.EnsureStorageSafe();
+        StoragePathGuard.EnsurePathInsideDirectory(_statePath, activeSaveDirectory, "active save state path");
+        StoragePathGuard.EnsureSafeFilePath(_statePath, "active save state path");
+    }
+
+    private void EnsureStateBackupPathSafe(string campaignId, string? backupPath, string description)
+    {
+        if (string.IsNullOrWhiteSpace(backupPath))
+            return;
+
+        var backupDirectory = _bank.GetBackupDirectory(campaignId);
+        StoragePathGuard.EnsurePathInsideDirectory(backupPath, backupDirectory, description);
+        StoragePathGuard.EnsureSafeFilePath(backupPath, description);
+    }
+
+    private static IReadOnlyList<PlayerIdentity> RefreshRoster(
+        IReadOnlyList<PlayerIdentity> existingRoster,
+        IReadOnlyList<PlayerIdentity>? capturedRoster)
+    {
+        if (capturedRoster is null || capturedRoster.Count == 0)
+            return existingRoster;
+
+        if (existingRoster.Count == 0)
+            return capturedRoster;
+
+        if (!AllStableIds(existingRoster) || !AllStableIds(capturedRoster))
+            return existingRoster;
+
+        var capturedGroups = capturedRoster
+            .GroupBy(player => player.StableId!, StringComparer.Ordinal)
+            .ToList();
+        if (capturedGroups.Any(group => group.Count() > 1))
+            return existingRoster;
+
+        var capturedById = capturedGroups.ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        if (capturedById.Count != existingRoster.Count ||
+            !existingRoster.Select(player => player.StableId!).All(capturedById.ContainsKey))
+        {
+            return existingRoster;
+        }
+
+        return existingRoster
+            .Select(existing => MergePlayer(existing, capturedById[existing.StableId!]))
+            .ToList();
+    }
+
+    private static PlayerIdentity MergePlayer(PlayerIdentity existing, PlayerIdentity captured) =>
+        existing with
+        {
+            DisplayName = string.IsNullOrWhiteSpace(captured.DisplayName)
+                ? existing.DisplayName
+                : captured.DisplayName,
+            SelectedCharacterId = string.IsNullOrWhiteSpace(captured.SelectedCharacterId)
+                ? existing.SelectedCharacterId
+                : captured.SelectedCharacterId
+        };
+
+    private static bool AllStableIds(IReadOnlyList<PlayerIdentity> roster) =>
+        roster.All(player => !string.IsNullOrWhiteSpace(player.StableId));
 }

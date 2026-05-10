@@ -19,7 +19,12 @@ public static class HostFlowPatchTests
         yield return new TestCase("run save manager patch exposes postfix", RunSaveManagerPatchExposesPostfix);
         yield return new TestCase("recovery modal exposes show method", RecoveryModalExposesShowMethod);
         yield return new TestCase("picker modal builds details body text", PickerModalBuildsDetailsBodyText);
+        yield return new TestCase("picker modal keeps details body readable width", PickerModalKeepsDetailsBodyReadableWidth);
         yield return new TestCase("picker modal exposes explicit UI builder", PickerModalExposesExplicitUiBuilder);
+        yield return new TestCase("picker modal maps native character icon paths", PickerModalMapsNativeCharacterIconPaths);
+        yield return new TestCase("picker modal exposes badge fallback helper", PickerModalExposesBadgeFallbackHelper);
+        yield return new TestCase("picker modal constrains character icon texture size", PickerModalConstrainsCharacterIconTextureSize);
+        yield return new TestCase("picker modal exposes split panel helpers", PickerModalExposesSplitPanelHelpers);
         yield return new TestCase("recovery modal exposes explicit UI builder", RecoveryModalExposesExplicitUiBuilder);
         yield return new TestCase("RMP host compatibility opens picker before direct host", RmpHostCompatibilityOpensPickerBeforeDirectHost);
         yield return new TestCase("RMP host compatibility resumes original host handler", RmpHostCompatibilityResumesOriginalHostHandler);
@@ -185,12 +190,106 @@ public static class HostFlowPatchTests
         AssertEx.Equal("Progress: Floor 18\nPlayers: 2\n\nRoster\n1. buddy1\n2. buddy2", body);
     }
 
+    private static void PickerModalKeepsDetailsBodyReadableWidth()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var minimumWidthMethod = modalType!.GetMethod("GetDetailsBodyMinimumWidth", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Details body minimum width helper was not found");
+        var createDetailsBodyLabel = modalType.GetMethod("CreateDetailsBodyLabel", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Details body label helper was not found");
+
+        var minimumWidth = (float)minimumWidthMethod.Invoke(null, [])!;
+
+        AssertEx.True(createDetailsBodyLabel.ReturnType.FullName == "Godot.Label");
+        AssertEx.True(minimumWidth >= 560, "Details body label needs a stable readable width");
+    }
+
     private static void PickerModalExposesExplicitUiBuilder()
     {
         var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
         AssertEx.True(modalType is not null);
         var buildUi = modalType!.GetMethod("BuildUi", BindingFlags.Instance | BindingFlags.NonPublic);
         AssertEx.True(buildUi is not null);
+    }
+
+    private static void PickerModalMapsNativeCharacterIconPaths()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var characterIconPath = modalType!.GetMethod("CharacterIconPath", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("CharacterIconPath helper was not found");
+
+        AssertEx.Equal("res://images/ui/top_panel/character_icon_ironclad.png", characterIconPath.Invoke(null, ["CHARACTER.IRONCLAD"]));
+        AssertEx.Equal("res://images/ui/top_panel/character_icon_silent.png", characterIconPath.Invoke(null, ["CHARACTER.SILENT"]));
+        AssertEx.Equal("res://images/ui/top_panel/character_icon_defect.png", characterIconPath.Invoke(null, ["CHARACTER.DEFECT"]));
+        AssertEx.Equal("res://images/ui/top_panel/character_icon_necrobinder.png", characterIconPath.Invoke(null, ["CHARACTER.NECROBINDER"]));
+        AssertEx.Equal("res://images/ui/top_panel/character_icon_regent.png", characterIconPath.Invoke(null, ["CHARACTER.REGENT"]));
+        AssertEx.Equal(null, characterIconPath.Invoke(null, ["CHARACTER.UNKNOWN"]));
+        AssertEx.Equal(null, characterIconPath.Invoke(null, [null]));
+    }
+
+    private static void PickerModalExposesBadgeFallbackHelper()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var createCharacterBadge = modalType!.GetMethod("CreateCharacterBadge", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("CreateCharacterBadge helper was not found");
+        var createCharacterIndicator = modalType.GetMethod("CreateCharacterIndicator", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("CreateCharacterIndicator helper was not found");
+
+        AssertEx.True(createCharacterBadge.ReturnType.FullName == "Godot.Control");
+        AssertEx.True(createCharacterIndicator.ReturnType.FullName == "Godot.Control");
+    }
+
+    private static void PickerModalConstrainsCharacterIconTextureSize()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var getCharacterIconSize = modalType!.GetMethod("GetCharacterIconSize", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("GetCharacterIconSize helper was not found");
+        var getCharacterIconExpandMode = modalType.GetMethod("GetCharacterIconExpandMode", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("GetCharacterIconExpandMode helper was not found");
+        var createCharacterIconTextureRect = modalType.GetMethod("CreateCharacterIconTextureRect", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("CreateCharacterIconTextureRect helper was not found");
+
+        var iconSize = getCharacterIconSize.Invoke(null, [])!;
+        var expandMode = getCharacterIconExpandMode.Invoke(null, [])!;
+
+        AssertEx.Equal(42f, GetVector2Component(iconSize, "X"));
+        AssertEx.Equal(42f, GetVector2Component(iconSize, "Y"));
+        AssertEx.Equal("IgnoreSize", expandMode.ToString());
+        AssertEx.Equal("Godot.TextureRect", createCharacterIconTextureRect.ReturnType.FullName);
+    }
+
+    private static float GetVector2Component(object vector, string name)
+    {
+        var type = vector.GetType();
+        var value = type.GetProperty(name)?.GetValue(vector)
+            ?? type.GetField(name)?.GetValue(vector)
+            ?? throw new InvalidOperationException($"Vector2 component {name} was not found");
+        return Convert.ToSingle(value);
+    }
+
+    private static void PickerModalExposesSplitPanelHelpers()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+
+        foreach (var methodName in new[]
+        {
+            "BuildCampaignList",
+            "BuildPreviewPanel",
+            "SelectCampaignPreview",
+            "ContinueSelectedCampaign",
+            "CreatePreviewSectionTitle",
+            "CreatePreviewFrame",
+            "SetSelectedCampaignButton"
+        })
+        {
+            var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
     }
 
     private static void RecoveryModalExposesExplicitUiBuilder()

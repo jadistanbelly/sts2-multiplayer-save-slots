@@ -64,14 +64,15 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
 
     public ActiveSaveRecoveryModel BuildRecoveryModel(MultiplayerGameMode gameMode)
     {
-        if (!File.Exists(_activeSavePath))
-            return ActiveSaveRecoveryModel.None();
-
-        if (!File.Exists(_statePath))
-            return DuplicateModel("Current multiplayer save is not managed by Multiplayer Save Slots yet.");
-
         try
         {
+            EnsureInspectionPathsSafe();
+            if (!File.Exists(_activeSavePath))
+                return ActiveSaveRecoveryModel.None();
+
+            if (!File.Exists(_statePath))
+                return DuplicateModel("Current multiplayer save is not managed by Multiplayer Save Slots yet.");
+
             var state = JsonFile.Read<ActiveSaveState>(_statePath);
             var activeChecksum = FileChecksum.Sha256(_activeSavePath);
             if (activeChecksum == state.ActiveChecksumAfterActivation)
@@ -86,6 +87,11 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
                         "Sync Active Save",
                         "Back up the campaign payload and copy the active save into the selected campaign.")
                 ]);
+        }
+        catch (StoragePathSafetyException ex)
+        {
+            Console.Error.WriteLine($"[MultiplayerSaveSlots] Active save path safety check failed: {ex.Message}");
+            return ActiveSaveRecoveryModel.None();
         }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
         {
@@ -103,6 +109,8 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
                 return OperationResult.Ok();
             }
 
+            StoragePathGuard.EnsureSafeFilePath(_activeSavePath, "active save path");
+            _switcher.EnsureCanUseRuntimePaths();
             if (!File.Exists(_activeSavePath))
                 return OperationResult.Fail("Active multiplayer save is missing");
 
@@ -132,6 +140,13 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
                     "Duplicate Active Save",
                     "Copy the current active save into the Multiplayer Save Slots bank before continuing.")
             ]);
+
+    private void EnsureInspectionPathsSafe()
+    {
+        StoragePathGuard.EnsureSafeFilePath(_activeSavePath, "active save path");
+        StoragePathGuard.EnsureSafeFilePath(_statePath, "active save state path");
+        _bank.EnsureStorageSafe();
+    }
 
     private CampaignMetadataSnapshot CaptureMetadataOrEmpty()
     {
