@@ -28,6 +28,8 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal exposes split panel helpers", PickerModalExposesSplitPanelHelpers);
         yield return new TestCase("picker modal exposes archive management helpers", PickerModalExposesArchiveManagementHelpers);
         yield return new TestCase("picker modal exposes active and archived save action helpers", PickerModalExposesSaveActionHelpers);
+        yield return new TestCase("picker modal exposes custom rename helpers", PickerModalExposesCustomRenameHelpers);
+        yield return new TestCase("modal styling exposes text input styling", ModalStylingExposesTextInputStyling);
         yield return new TestCase("picker modal exposes quick polish layout constants", PickerModalExposesQuickPolishLayoutConstants);
         yield return new TestCase("modal styling exposes action button variants", ModalStylingExposesActionButtonVariants);
         yield return new TestCase("modal styling exposes rounded card radius", ModalStylingExposesRoundedCardRadius);
@@ -363,6 +365,33 @@ public static class HostFlowPatchTests
             var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
             AssertEx.True(method is not null, $"{methodName} helper was not found");
         }
+    }
+
+    private static void PickerModalExposesCustomRenameHelpers()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+
+        foreach (var methodName in new[]
+        {
+            "CreatePreviewTitleRow",
+            "CreateRenameIconButton",
+            "ShowRenameModal",
+            "RenameSelectedCampaign"
+        })
+        {
+            var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+    }
+
+    private static void ModalStylingExposesTextInputStyling()
+    {
+        var stylingType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.ModalUiStyling");
+        AssertEx.True(stylingType is not null);
+
+        var method = stylingType!.GetMethod("StyleTextInput", BindingFlags.Static | BindingFlags.Public);
+        AssertEx.True(method is not null, "StyleTextInput helper was not found");
     }
 
     private static void PickerModalExposesQuickPolishLayoutConstants()

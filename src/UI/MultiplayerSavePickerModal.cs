@@ -21,6 +21,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     private Button? _restoreButton;
     private Button? _continueButton;
     private Button? _deleteButton;
+    private Button? _renameButton;
     private MultiplayerSavePickerRow? _selectedCampaign;
     private Button? _selectedCampaignButton;
     private bool _built;
@@ -564,6 +565,73 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         actions.AddChild(confirm);
     }
 
+    private void ShowRenameModal()
+    {
+        if (_selectedCampaign?.Kind != PickerRowKind.Campaign)
+            return;
+
+        CloseDetails();
+
+        var overlay = new Control
+        {
+            Name = "MultiplayerSaveRename",
+            MouseFilter = MouseFilterEnum.Stop
+        };
+        overlay.SetAnchorsPreset(LayoutPreset.FullRect);
+        AddChild(overlay);
+        _detailsOverlay = overlay;
+
+        var panel = ModalUiStyling.CreatePanel(new Vector2(620, 270), 310, 135);
+        overlay.AddChild(panel);
+
+        var root = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        root.AddThemeConstantOverride("separation", 14);
+        panel.AddChild(root);
+
+        var title = new Label
+        {
+            Text = "Rename Save Slot",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        ModalUiStyling.StyleTitle(title);
+        root.AddChild(title);
+
+        var input = new LineEdit
+        {
+            Text = _selectedCampaign.Title,
+            PlaceholderText = "Run name"
+        };
+        ModalUiStyling.StyleTextInput(input);
+        root.AddChild(input);
+
+        var actions = new HBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        actions.AddThemeConstantOverride("separation", 12);
+        root.AddChild(actions);
+
+        var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44) };
+        ModalUiStyling.StyleButton(cancel);
+        cancel.Pressed += CloseDetails;
+        actions.AddChild(cancel);
+
+        actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
+
+        var save = new Button { Text = "Save", CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44) };
+        ModalUiStyling.StylePrimaryButton(save);
+        save.Pressed += () => RenameSelectedCampaign(input.Text);
+        actions.AddChild(save);
+
+        input.GrabFocus();
+        input.SelectAll();
+    }
+
     private void ArchiveSelectedCampaign()
     {
         var campaignId = _selectedCampaign?.CampaignId;
@@ -574,6 +642,22 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         if (!result.Success)
         {
             ShowError(result.ErrorMessage ?? "Unable to archive multiplayer save.");
+            return;
+        }
+
+        RefreshPicker();
+    }
+
+    private void RenameSelectedCampaign(string? customName)
+    {
+        var campaignId = _selectedCampaign?.CampaignId;
+        if (string.IsNullOrWhiteSpace(campaignId))
+            return;
+
+        var result = _controller.RenameCampaign(campaignId, customName);
+        if (!result.Success)
+        {
+            ShowError(result.ErrorMessage ?? "Unable to rename multiplayer save.");
             return;
         }
 
@@ -664,6 +748,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         _deleteButton = null;
         _archiveButton = null;
         _restoreButton = null;
+        _renameButton = null;
 
         if (row?.Details is null)
         {
@@ -679,7 +764,9 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         }
 
         var details = row.Details;
-        _previewRoot.AddChild(CreatePreviewLabel(details.Title, 27, HorizontalAlignment.Center));
+        _previewRoot.AddChild(CreatePreviewTitleRow(row, details));
+        if (!string.IsNullOrWhiteSpace(details.AutoLabel))
+            _previewRoot.AddChild(CreatePreviewLabel(details.AutoLabel, 17, HorizontalAlignment.Center));
         _previewRoot.AddChild(CreatePreviewLabel(details.Subtitle, 19, HorizontalAlignment.Center));
 
         var scroll = new ScrollContainer
@@ -718,6 +805,44 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         };
         content.AddThemeConstantOverride("separation", 7);
         return content;
+    }
+
+    private Control CreatePreviewTitleRow(MultiplayerSavePickerRow row, MultiplayerSavePickerDetails details)
+    {
+        var titleRow = new HBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            Alignment = BoxContainer.AlignmentMode.Center
+        };
+        titleRow.AddThemeConstantOverride("separation", 8);
+
+        var title = CreatePreviewLabel(details.Title, 27, HorizontalAlignment.Center);
+        title.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        titleRow.AddChild(title);
+
+        if (row.Kind == PickerRowKind.Campaign)
+        {
+            _renameButton = CreateRenameIconButton();
+            titleRow.AddChild(_renameButton);
+        }
+
+        return titleRow;
+    }
+
+    private Button CreateRenameIconButton()
+    {
+        var button = new Button
+        {
+            Text = "✎",
+            TooltipText = "Rename",
+            CustomMinimumSize = new Vector2(40, 34),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
+        };
+        ModalUiStyling.StyleButton(button);
+        button.AddThemeFontSizeOverride("font_size", 18);
+        button.Pressed += ShowRenameModal;
+        return button;
     }
 
     private static Control CreateRosterPreviewRow(MultiplayerSavePickerRosterEntry entry)
@@ -922,8 +1047,14 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         _detailsOverlay = null;
     }
 
-    private static string BuildDetailsBody(MultiplayerSavePickerDetails details) =>
-        $"{string.Join('\n', details.SummaryLines)}\n\nRoster\n{string.Join('\n', details.RosterLines)}";
+    private static string BuildDetailsBody(MultiplayerSavePickerDetails details)
+    {
+        var summary = string.Join('\n', details.SummaryLines);
+        var roster = $"Roster\n{string.Join('\n', details.RosterLines)}";
+        return string.IsNullOrWhiteSpace(details.AutoLabel)
+            ? $"{summary}\n\n{roster}"
+            : $"{details.AutoLabel}\n\n{summary}\n\n{roster}";
+    }
 
     private static Label CreateDetailsBodyLabel(string text)
     {
