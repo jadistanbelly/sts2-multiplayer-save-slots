@@ -11,7 +11,8 @@ public enum PickerRowKind
 
 public sealed record MultiplayerSavePickerModel(
     MultiplayerGameMode GameMode,
-    IReadOnlyList<MultiplayerSavePickerRow> Rows)
+    IReadOnlyList<MultiplayerSavePickerRow> Rows,
+    bool HasDeletedCampaigns = false)
 {
     public IReadOnlyList<MultiplayerSavePickerRow> CampaignRows =>
         Rows.Where(row => row.Kind == PickerRowKind.Campaign).ToList();

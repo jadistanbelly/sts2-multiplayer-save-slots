@@ -33,6 +33,14 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
             .Select(TryRepairPayloadCharacterMetadata)
             .ToList();
 
+    public bool HasDeletedCampaigns() => _bank.HasDeletedCampaigns();
+
+    public void ArchiveCampaign(string campaignId, DateTimeOffset deletedAtUtc) =>
+        _bank.ArchiveCampaign(campaignId, deletedAtUtc);
+
+    public void ClearDeletedCampaigns() =>
+        _bank.ClearDeletedCampaigns();
+
     private CampaignMetadata TryRepairPayloadCharacterMetadata(CampaignMetadata metadata)
     {
         if (!metadata.Roster.Any(player => string.IsNullOrWhiteSpace(player.SelectedCharacterId)))

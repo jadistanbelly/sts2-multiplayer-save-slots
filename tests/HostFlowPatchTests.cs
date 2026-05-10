@@ -26,6 +26,8 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal constrains character icon texture size", PickerModalConstrainsCharacterIconTextureSize);
         yield return new TestCase("picker modal wraps character indicators in fixed slot", PickerModalWrapsCharacterIndicatorsInFixedSlot);
         yield return new TestCase("picker modal exposes split panel helpers", PickerModalExposesSplitPanelHelpers);
+        yield return new TestCase("picker modal exposes delete helpers", PickerModalExposesDeleteHelpers);
+        yield return new TestCase("modal styling exposes action button variants", ModalStylingExposesActionButtonVariants);
         yield return new TestCase("recovery modal exposes explicit UI builder", RecoveryModalExposesExplicitUiBuilder);
         yield return new TestCase("RMP host compatibility opens picker before direct host", RmpHostCompatibilityOpensPickerBeforeDirectHost);
         yield return new TestCase("RMP host compatibility resumes original host handler", RmpHostCompatibilityResumesOriginalHostHandler);
@@ -311,6 +313,41 @@ public static class HostFlowPatchTests
         })
         {
             var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+    }
+
+    private static void PickerModalExposesDeleteHelpers()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+
+        foreach (var methodName in new[]
+        {
+            "ShowDeleteConfirmation",
+            "ShowClearDeletedConfirmation",
+            "DeleteSelectedCampaign",
+            "ClearDeletedCampaigns",
+            "RefreshPicker"
+        })
+        {
+            var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+    }
+
+    private static void ModalStylingExposesActionButtonVariants()
+    {
+        var stylingType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.ModalUiStyling");
+        AssertEx.True(stylingType is not null);
+
+        foreach (var methodName in new[]
+        {
+            "StylePrimaryButton",
+            "StyleDangerButton"
+        })
+        {
+            var method = stylingType!.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public);
             AssertEx.True(method is not null, $"{methodName} helper was not found");
         }
     }

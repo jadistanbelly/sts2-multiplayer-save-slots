@@ -39,7 +39,7 @@ public sealed class HostFlowController
         var rows = new List<MultiplayerSavePickerRow> { MultiplayerSavePickerRow.StartNew() };
         rows.AddRange(MultiplayerSavePickerRow.Campaigns(_bank.ListCampaigns(gameMode)));
 
-        return new MultiplayerSavePickerModel(gameMode, rows);
+        return new MultiplayerSavePickerModel(gameMode, rows, _bank.HasDeletedCampaigns());
     }
 
     public ActiveSaveRecoveryModel BuildRecoveryModel(MultiplayerGameMode gameMode) =>
@@ -125,5 +125,31 @@ public sealed class HostFlowController
             return recovery;
 
         return SelectExistingCampaign(campaignId, gameMode);
+    }
+
+    public OperationResult ArchiveCampaign(string campaignId)
+    {
+        try
+        {
+            _bank.ArchiveCampaign(campaignId, _clock.UtcNow);
+            return OperationResult.Ok();
+        }
+        catch (Exception ex)
+        {
+            return OperationResult.Fail(ex.Message);
+        }
+    }
+
+    public OperationResult ClearDeletedCampaigns()
+    {
+        try
+        {
+            _bank.ClearDeletedCampaigns();
+            return OperationResult.Ok();
+        }
+        catch (Exception ex)
+        {
+            return OperationResult.Fail(ex.Message);
+        }
     }
 }

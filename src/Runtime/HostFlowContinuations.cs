@@ -5,6 +5,9 @@ namespace MultiplayerSaveSlots.Runtime;
 public interface IHostFlowSaveBank
 {
     IReadOnlyList<CampaignMetadata> ListCampaigns(MultiplayerGameMode gameMode);
+    bool HasDeletedCampaigns();
+    void ArchiveCampaign(string campaignId, DateTimeOffset deletedAtUtc);
+    void ClearDeletedCampaigns();
 }
 
 public interface IActiveSaveActivator

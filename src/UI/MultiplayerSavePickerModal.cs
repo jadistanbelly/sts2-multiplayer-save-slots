@@ -17,6 +17,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     private Control? _detailsOverlay;
     private VBoxContainer? _previewRoot;
     private Button? _continueButton;
+    private Button? _deleteButton;
     private MultiplayerSavePickerRow? _selectedCampaign;
     private Button? _selectedCampaignButton;
     private bool _built;
@@ -98,13 +99,35 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
         actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
 
+        if (_model.HasDeletedCampaigns)
+        {
+            var clearDeleted = new Button
+            {
+                Text = "Clear Deleted Saves",
+                CustomMinimumSize = new Vector2(230, 46)
+            };
+            ModalUiStyling.StyleDangerButton(clearDeleted);
+            clearDeleted.Pressed += ShowClearDeletedConfirmation;
+            actions.AddChild(clearDeleted);
+        }
+
+        _deleteButton = new Button
+        {
+            Text = "Delete",
+            Disabled = _selectedCampaign is null,
+            CustomMinimumSize = new Vector2(140, 46)
+        };
+        ModalUiStyling.StyleDangerButton(_deleteButton);
+        _deleteButton.Pressed += ShowDeleteConfirmation;
+        actions.AddChild(_deleteButton);
+
         _continueButton = new Button
         {
             Text = "Continue",
             Disabled = _selectedCampaign is null,
             CustomMinimumSize = new Vector2(190, 46)
         };
-        ModalUiStyling.StyleButton(_continueButton);
+        ModalUiStyling.StylePrimaryButton(_continueButton);
         _continueButton.Pressed += ContinueSelectedCampaign;
         actions.AddChild(_continueButton);
 
@@ -223,7 +246,10 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             CustomMinimumSize = minimumSize,
             AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
-        ModalUiStyling.StyleButton(button);
+        if (row.Kind == PickerRowKind.StartNewRun)
+            ModalUiStyling.StylePrimaryButton(button);
+        else
+            ModalUiStyling.StyleButton(button);
         button.Pressed += () => SelectRow(row);
         return button;
     }
@@ -233,6 +259,8 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         _selectedCampaign = row.Kind == PickerRowKind.Campaign ? row : null;
         if (_continueButton is not null)
             _continueButton.Disabled = _selectedCampaign is null;
+        if (_deleteButton is not null)
+            _deleteButton.Disabled = _selectedCampaign is null;
 
         RenderPreview(_selectedCampaign);
         if (_selectedCampaign?.CampaignId is { } campaignId
@@ -264,6 +292,122 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             return;
 
         SelectRow(_selectedCampaign);
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        if (_selectedCampaign is null)
+            return;
+
+        ShowConfirmation(
+            "Delete Save Slot?",
+            $"Move this multiplayer save to deleted archives?\n\n{_selectedCampaign.Title}\n{_selectedCampaign.Subtitle}",
+            "Delete",
+            DeleteSelectedCampaign);
+    }
+
+    private void ShowClearDeletedConfirmation()
+    {
+        ShowConfirmation(
+            "Clear Deleted Saves?",
+            "Permanently remove all deleted multiplayer save archives. This cannot be undone.",
+            "Clear Deleted Saves",
+            ClearDeletedCampaigns);
+    }
+
+    private void ShowConfirmation(string titleText, string message, string confirmText, Action onConfirm)
+    {
+        CloseDetails();
+
+        var overlay = new Control
+        {
+            Name = "MultiplayerSaveConfirmation",
+            MouseFilter = MouseFilterEnum.Stop
+        };
+        overlay.SetAnchorsPreset(LayoutPreset.FullRect);
+        AddChild(overlay);
+        _detailsOverlay = overlay;
+
+        var panel = ModalUiStyling.CreatePanel(new Vector2(620, 330), 310, 165);
+        overlay.AddChild(panel);
+
+        var root = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        root.AddThemeConstantOverride("separation", 16);
+        panel.AddChild(root);
+
+        var title = new Label
+        {
+            Text = titleText,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        ModalUiStyling.StyleTitle(title);
+        root.AddChild(title);
+
+        var body = CreatePreviewLabel(message, 20, HorizontalAlignment.Center);
+        body.SizeFlagsVertical = SizeFlags.ExpandFill;
+        root.AddChild(body);
+
+        var actions = new HBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        actions.AddThemeConstantOverride("separation", 12);
+        root.AddChild(actions);
+
+        var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(180, 44) };
+        ModalUiStyling.StyleButton(cancel);
+        cancel.Pressed += CloseDetails;
+        actions.AddChild(cancel);
+
+        actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
+
+        var confirm = new Button { Text = confirmText, CustomMinimumSize = new Vector2(230, 44) };
+        ModalUiStyling.StyleDangerButton(confirm);
+        confirm.Pressed += () =>
+        {
+            CloseDetails();
+            onConfirm();
+        };
+        actions.AddChild(confirm);
+    }
+
+    private void DeleteSelectedCampaign()
+    {
+        var campaignId = _selectedCampaign?.CampaignId;
+        if (string.IsNullOrWhiteSpace(campaignId))
+            return;
+
+        var result = _controller.ArchiveCampaign(campaignId);
+        if (!result.Success)
+        {
+            ShowError(result.ErrorMessage ?? "Unable to delete multiplayer save.");
+            return;
+        }
+
+        RefreshPicker();
+    }
+
+    private void ClearDeletedCampaigns()
+    {
+        var result = _controller.ClearDeletedCampaigns();
+        if (!result.Success)
+        {
+            ShowError(result.ErrorMessage ?? "Unable to clear deleted multiplayer saves.");
+            return;
+        }
+
+        RefreshPicker();
+    }
+
+    private void RefreshPicker()
+    {
+        CloseDetails();
+        Show(_controller, _model.GameMode);
     }
 
     private void RenderPreview(MultiplayerSavePickerRow? row)

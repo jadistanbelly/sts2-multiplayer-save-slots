@@ -87,6 +87,44 @@ public sealed class MultiplayerSaveBank
         JsonFile.Write(_paths.MetadataPath(metadata.CampaignId), metadata);
     }
 
+    public string ArchiveCampaign(string campaignId, DateTimeOffset deletedAtUtc)
+    {
+        EnsureCampaignIndexed(campaignId);
+        var sourceDirectory = _paths.CampaignDirectory(campaignId);
+        StoragePathGuard.EnsurePathInsideDirectory(sourceDirectory, _paths.SavesDirectory, "campaign directory");
+        StoragePathGuard.EnsureSafeTree(sourceDirectory, "campaign directory");
+        if (!Directory.Exists(sourceDirectory))
+            throw new DirectoryNotFoundException($"Campaign directory is missing: {sourceDirectory}");
+
+        StoragePathGuard.EnsureSafeDirectoryPath(_paths.DeletedDirectory, "deleted campaigns directory");
+        Directory.CreateDirectory(_paths.DeletedDirectory);
+        var archiveDirectory = NextArchiveDirectory(campaignId, deletedAtUtc);
+        StoragePathGuard.EnsurePathInsideDirectory(archiveDirectory, _paths.DeletedDirectory, "deleted campaign directory");
+        StoragePathGuard.EnsureSafeDirectoryPath(archiveDirectory, "deleted campaign directory");
+
+        Directory.Move(sourceDirectory, archiveDirectory);
+        var remainingIds = ReadIndex().CampaignIds.Where(id => !string.Equals(id, campaignId, StringComparison.Ordinal));
+        WriteIndex(remainingIds);
+        return archiveDirectory;
+    }
+
+    public bool HasDeletedCampaigns()
+    {
+        StoragePathGuard.EnsureSafeDirectoryPath(_paths.DeletedDirectory, "deleted campaigns directory");
+        return Directory.Exists(_paths.DeletedDirectory) &&
+            Directory.EnumerateFileSystemEntries(_paths.DeletedDirectory).Any();
+    }
+
+    public void ClearDeletedCampaigns()
+    {
+        StoragePathGuard.EnsureSafeDirectoryPath(_paths.DeletedDirectory, "deleted campaigns directory");
+        if (!Directory.Exists(_paths.DeletedDirectory))
+            return;
+
+        StoragePathGuard.EnsureSafeTree(_paths.DeletedDirectory, "deleted campaigns directory");
+        Directory.Delete(_paths.DeletedDirectory, recursive: true);
+    }
+
     internal void EnsureCampaignIndexed(string campaignId)
     {
         SaveBankPaths.ValidateCampaignId(campaignId);
@@ -97,6 +135,22 @@ public sealed class MultiplayerSaveBank
 
     public void EnsureStorageSafe() =>
         StoragePathGuard.EnsureSafeTree(_paths.RootDirectory, "save bank");
+
+    private string NextArchiveDirectory(string campaignId, DateTimeOffset deletedAtUtc)
+    {
+        var archiveDirectory = _paths.DeletedCampaignDirectory(campaignId, deletedAtUtc);
+        if (!Directory.Exists(archiveDirectory) && !File.Exists(archiveDirectory))
+            return archiveDirectory;
+
+        for (var suffix = 1; suffix < 1000; suffix++)
+        {
+            var candidate = $"{archiveDirectory}-{suffix:00}";
+            if (!Directory.Exists(candidate) && !File.Exists(candidate))
+                return candidate;
+        }
+
+        throw new IOException($"Unable to create deleted campaign archive path for {campaignId}.");
+    }
 
     private void EnsureCreated()
     {
