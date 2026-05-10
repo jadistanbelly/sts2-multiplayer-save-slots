@@ -17,6 +17,7 @@ public sealed class ActiveSaveSwitcher
 
     public void Activate(string campaignId, DateTimeOffset nowUtc)
     {
+        EnsureRuntimePathsSafe();
         var payloadPath = _bank.GetPayloadPath(campaignId);
         if (!File.Exists(payloadPath))
             throw new FileNotFoundException("Campaign payload is missing", payloadPath);
@@ -68,6 +69,7 @@ public sealed class ActiveSaveSwitcher
 
     public void RestorePreviousActive(DateTimeOffset nowUtc)
     {
+        EnsureRuntimePathsSafe();
         if (!File.Exists(_statePath))
             throw new InvalidOperationException("Cannot restore active save without active campaign state");
 
@@ -116,6 +118,7 @@ public sealed class ActiveSaveSwitcher
 
     public void ClaimActiveSave(string campaignId, DateTimeOffset nowUtc)
     {
+        EnsureRuntimePathsSafe();
         if (!File.Exists(_activeSavePath))
             throw new FileNotFoundException("Active multiplayer save is missing", _activeSavePath);
 
@@ -156,6 +159,7 @@ public sealed class ActiveSaveSwitcher
         string? actOrFloor = null,
         IReadOnlyList<PlayerIdentity>? capturedRoster = null)
     {
+        EnsureRuntimePathsSafe();
         if (!File.Exists(_statePath))
             throw new InvalidOperationException("Cannot sync active save without active campaign state");
 
@@ -196,6 +200,18 @@ public sealed class ActiveSaveSwitcher
             Roster = refreshedRoster,
             Label = CampaignLabeler.Build(refreshedRoster)
         });
+    }
+
+    private void EnsureRuntimePathsSafe()
+    {
+        var activeSaveDirectory = Path.GetDirectoryName(Path.GetFullPath(_activeSavePath))
+            ?? Directory.GetCurrentDirectory();
+        StoragePathGuard.EnsureSafeDirectoryPath(activeSaveDirectory, "active save directory");
+        StoragePathGuard.EnsureSafeFilePath(_activeSavePath, "active save path");
+        StoragePathGuard.EnsurePathInsideDirectory(_bank.RootDirectory, activeSaveDirectory, "save bank root");
+        _bank.EnsureStorageSafe();
+        StoragePathGuard.EnsurePathInsideDirectory(_statePath, activeSaveDirectory, "active save state path");
+        StoragePathGuard.EnsureSafeFilePath(_statePath, "active save state path");
     }
 
     private static IReadOnlyList<PlayerIdentity> RefreshRoster(

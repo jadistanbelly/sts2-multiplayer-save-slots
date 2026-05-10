@@ -16,7 +16,9 @@ public static class MultiplayerSaveBankTests
         tests.Add(new TestCase("save bank ignores duplicate ids in index", IgnoresDuplicateIdsInIndex));
         tests.Add(new TestCase("save bank skips missing metadata while listing", SkipsMissingMetadataWhileListing));
         tests.Add(new TestCase("save bank skips malformed metadata while listing", SkipsMalformedMetadataWhileListing));
+        tests.Add(new TestCase("save bank skips metadata with mismatched campaign id while listing", SkipsMismatchedMetadataWhileListing));
         tests.Add(new TestCase("save bank update rejects unindexed campaign", UpdateRejectsUnindexedCampaign));
+        tests.Add(new TestCase("save bank update rejects symlinked metadata path before mutation", UpdateRejectsSymlinkedMetadataPathBeforeMutation));
         tests.Add(new TestCase("save bank paths reject invalid campaign ids", PathsRejectInvalidCampaignIds));
     }
 
@@ -211,6 +213,27 @@ public static class MultiplayerSaveBankTests
         AssertEx.Equal(valid.CampaignId, campaigns[0].CampaignId);
     }
 
+    private static void SkipsMismatchedMetadataWhileListing()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var valid = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "valid.save", "valid"),
+            DateTimeOffset.UtcNow));
+        var mismatchedId = Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(paths.CampaignDirectory(mismatchedId));
+        JsonFile.Write(paths.MetadataPath(mismatchedId), valid with { CampaignId = "not-a-guid" });
+        JsonFile.Write(paths.IndexPath, new CampaignIndex([valid.CampaignId, mismatchedId]));
+
+        var campaigns = bank.ListCampaigns(MultiplayerGameMode.Standard);
+
+        AssertEx.Equal(1, campaigns.Count);
+        AssertEx.Equal(valid.CampaignId, campaigns[0].CampaignId);
+    }
+
     private static void UpdateRejectsUnindexedCampaign()
     {
         using var temp = new TempDirectory();
@@ -227,6 +250,26 @@ public static class MultiplayerSaveBankTests
             ActOrFloor: null);
 
         AssertEx.Throws<InvalidOperationException>(() => bank.UpdateMetadata(metadata));
+    }
+
+    private static void UpdateRejectsSymlinkedMetadataPathBeforeMutation()
+    {
+        using var temp = new TempDirectory();
+        var paths = new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves"));
+        var bank = new MultiplayerSaveBank(paths);
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            CreatePayload(temp.Path, "vanilla.save", "run-payload"),
+            DateTimeOffset.UtcNow));
+        var externalMetadata = Path.Combine(temp.Path, "external-metadata.json");
+        File.WriteAllText(externalMetadata, "external metadata");
+        File.Delete(paths.MetadataPath(metadata.CampaignId));
+        File.CreateSymbolicLink(paths.MetadataPath(metadata.CampaignId), externalMetadata);
+
+        AssertEx.Throws<InvalidOperationException>(() => bank.UpdateMetadata(metadata with { Label = "changed" }));
+        AssertEx.True((File.GetAttributes(paths.MetadataPath(metadata.CampaignId)) & FileAttributes.ReparsePoint) != 0);
+        AssertEx.Equal("external metadata", File.ReadAllText(externalMetadata));
     }
 
     private static void PathsRejectInvalidCampaignIds()

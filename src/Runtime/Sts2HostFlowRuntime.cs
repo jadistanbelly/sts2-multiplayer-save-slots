@@ -53,7 +53,7 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
             _bank.UpdateMetadata(repaired);
             return repaired;
         }
-        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException or ArgumentException)
         {
             Console.Error.WriteLine($"[MultiplayerSaveSlots] Failed to repair picker metadata for {metadata.CampaignId}: {ex.Message}");
             return metadata;
@@ -194,6 +194,7 @@ public sealed class Sts2ActiveSaveSync : IActiveSaveSync
     {
         try
         {
+            StoragePathGuard.EnsureSafeFilePath(_activeSavePath, "active save path");
             if (!File.Exists(_activeSavePath))
                 return OperationResult<string>.Fail("Active multiplayer save is missing");
 
@@ -335,14 +336,16 @@ public sealed class ActiveSaveReplacementGuard : IActiveSavePreflight
 
     public OperationResult EnsureActiveSaveCanBeReplaced()
     {
-        if (!File.Exists(_activeSavePath))
-            return OperationResult.Ok();
-
-        if (!File.Exists(_statePath))
-            return OperationResult.Fail("Current multiplayer save is not managed by Multiplayer Save Slots yet.");
-
         try
         {
+            StoragePathGuard.EnsureSafeFilePath(_activeSavePath, "active save path");
+            StoragePathGuard.EnsureSafeFilePath(_statePath, "active save state path");
+            if (!File.Exists(_activeSavePath))
+                return OperationResult.Ok();
+
+            if (!File.Exists(_statePath))
+                return OperationResult.Fail("Current multiplayer save is not managed by Multiplayer Save Slots yet.");
+
             var state = JsonFile.Read<ActiveSaveState>(_statePath);
             var currentActiveChecksum = FileChecksum.Sha256(_activeSavePath);
             return currentActiveChecksum == state.ActiveChecksumAfterActivation

@@ -64,14 +64,15 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
 
     public ActiveSaveRecoveryModel BuildRecoveryModel(MultiplayerGameMode gameMode)
     {
-        if (!File.Exists(_activeSavePath))
-            return ActiveSaveRecoveryModel.None();
-
-        if (!File.Exists(_statePath))
-            return DuplicateModel("Current multiplayer save is not managed by Multiplayer Save Slots yet.");
-
         try
         {
+            EnsureInspectionPathsSafe();
+            if (!File.Exists(_activeSavePath))
+                return ActiveSaveRecoveryModel.None();
+
+            if (!File.Exists(_statePath))
+                return DuplicateModel("Current multiplayer save is not managed by Multiplayer Save Slots yet.");
+
             var state = JsonFile.Read<ActiveSaveState>(_statePath);
             var activeChecksum = FileChecksum.Sha256(_activeSavePath);
             if (activeChecksum == state.ActiveChecksumAfterActivation)
@@ -103,6 +104,7 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
                 return OperationResult.Ok();
             }
 
+            StoragePathGuard.EnsureSafeFilePath(_activeSavePath, "active save path");
             if (!File.Exists(_activeSavePath))
                 return OperationResult.Fail("Active multiplayer save is missing");
 
@@ -132,6 +134,13 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
                     "Duplicate Active Save",
                     "Copy the current active save into the Multiplayer Save Slots bank before continuing.")
             ]);
+
+    private void EnsureInspectionPathsSafe()
+    {
+        StoragePathGuard.EnsureSafeFilePath(_activeSavePath, "active save path");
+        StoragePathGuard.EnsureSafeFilePath(_statePath, "active save state path");
+        _bank.EnsureStorageSafe();
+    }
 
     private CampaignMetadataSnapshot CaptureMetadataOrEmpty()
     {

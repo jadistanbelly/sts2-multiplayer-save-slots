@@ -18,12 +18,14 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("switcher activation fails before mutating active save when metadata is missing", ActivationMissingMetadataFailsBeforeMutatingActiveSave));
         tests.Add(new TestCase("switcher activation fails before mutating active save when metadata is malformed", ActivationMalformedMetadataFailsBeforeMutatingActiveSave));
         tests.Add(new TestCase("switcher activation fails before mutating active save when campaign is unindexed", ActivationUnindexedCampaignFailsBeforeMutatingActiveSave));
+        tests.Add(new TestCase("switcher activation rejects active save symlink before mutation", ActivationRejectsActiveSaveSymlinkBeforeMutation));
         tests.Add(new TestCase("switcher syncs active save back to selected campaign", SyncsBack));
         tests.Add(new TestCase("switcher sync-back backs up bank payload", SyncBackBacksUpBankPayload));
         tests.Add(new TestCase("switcher sync-back updates metadata", SyncBackUpdatesMetadata));
         tests.Add(new TestCase("switcher sync-back rejects missing active save", SyncBackRejectsMissingActiveSave));
         tests.Add(new TestCase("switcher rejects sync without active state", RejectsSyncWithoutActiveState));
         tests.Add(new TestCase("sync-back rejects stale bank payload before mutation", SyncBackRejectsStaleBankPayloadBeforeMutation));
+        tests.Add(new TestCase("sync-back rejects bank payload symlink before mutation", SyncBackRejectsBankPayloadSymlinkBeforeMutation));
         tests.Add(new TestCase("sync-back rejects active save matching previous active checksum", SyncBackRejectsActiveSaveMatchingPreviousActiveChecksum));
         tests.Add(new TestCase("sync-back updates active state checksum after successful sync", SyncBackUpdatesActiveStateChecksumAfterSuccessfulSync));
         tests.Add(new TestCase("activation rejects unsynced active state before mutation", ActivationRejectsUnsyncedActiveStateBeforeMutation));
@@ -31,11 +33,13 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("switcher restores previous active save after activation", RestoresPreviousActiveAfterActivation));
         tests.Add(new TestCase("switcher restore rejects changed activated save", RestoreRejectsChangedActivatedSave));
         tests.Add(new TestCase("switcher restore fails before mutating when previous state backup is missing", RestoreFailsBeforeMutatingWhenPreviousStateBackupMissing));
+        tests.Add(new TestCase("switcher restore rejects active save symlink before mutation", RestoreRejectsActiveSaveSymlinkBeforeMutation));
         tests.Add(new TestCase("switcher sync-back fails before mutating payload when metadata is missing", SyncBackMissingMetadataFailsBeforeMutatingPayload));
         tests.Add(new TestCase("switcher sync-back fails before mutating payload when metadata is malformed", SyncBackMalformedMetadataFailsBeforeMutatingPayload));
         tests.Add(new TestCase("switcher claims active save for pending new campaign", ClaimsActiveSaveForPendingNewCampaign));
         tests.Add(new TestCase("switcher claim rejects missing active save", ClaimRejectsMissingActiveSave));
         tests.Add(new TestCase("switcher claim rejects mismatched campaign payload", ClaimRejectsMismatchedCampaignPayload));
+        tests.Add(new TestCase("switcher claim rejects active save symlink before mutation", ClaimRejectsActiveSaveSymlinkBeforeMutation));
         tests.Add(new TestCase("recovery offers duplicate for unmanaged active save", RecoveryOffersDuplicateForUnmanagedActiveSave));
         tests.Add(new TestCase("recovery offers sync for unsynced managed active save", RecoveryOffersSyncForUnsyncedManagedActiveSave));
         tests.Add(new TestCase("recovery duplicates active save into bank", RecoveryDuplicatesActiveSaveIntoBank));
@@ -229,6 +233,28 @@ public static class ActiveSaveSwitcherTests
         AssertEx.False(File.Exists(state));
     }
 
+    private static void ActivationRejectsActiveSaveSymlinkBeforeMutation()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var activeTarget = Path.Combine(temp.Path, "active-target.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(source, "campaign");
+        File.WriteAllText(activeTarget, "outside-active");
+        CreateFileSymlink(active, activeTarget);
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+
+        AssertEx.Throws<InvalidOperationException>(() => switcher.Activate(metadata.CampaignId, DateTimeOffset.UtcNow));
+        AssertIsReparsePoint(active);
+        AssertEx.Equal("outside-active", File.ReadAllText(activeTarget));
+        AssertEx.False(File.Exists(state));
+        AssertNoBackups(bank.GetBackupDirectory(metadata.CampaignId));
+    }
+
     private static void SyncsBack()
     {
         using var temp = new TempDirectory();
@@ -402,6 +428,31 @@ public static class ActiveSaveSwitcherTests
         AssertNoBackups(bank.GetBackupDirectory(metadata.CampaignId));
     }
 
+    private static void SyncBackRejectsBankPayloadSymlinkBeforeMutation()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var externalPayload = Path.Combine(temp.Path, "external-payload.save");
+        File.WriteAllText(source, "campaign");
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, Path.Combine(temp.Path, "active-state.json"));
+
+        switcher.Activate(metadata.CampaignId, DateTimeOffset.UtcNow);
+        var payloadPath = bank.GetPayloadPath(metadata.CampaignId);
+        File.Delete(payloadPath);
+        File.WriteAllText(externalPayload, "campaign");
+        CreateFileSymlink(payloadPath, externalPayload);
+        File.WriteAllText(active, "campaign-progress");
+
+        AssertEx.Throws<InvalidOperationException>(() => switcher.SyncBack(DateTimeOffset.UtcNow));
+        AssertIsReparsePoint(payloadPath);
+        AssertEx.Equal("campaign", File.ReadAllText(externalPayload));
+        AssertNoBackups(bank.GetBackupDirectory(metadata.CampaignId));
+    }
+
     private static void SyncBackRejectsActiveSaveMatchingPreviousActiveChecksum()
     {
         using var temp = new TempDirectory();
@@ -562,6 +613,31 @@ public static class ActiveSaveSwitcherTests
         AssertEx.Equal(metadataB.CampaignId, JsonFile.Read<ActiveSaveState>(state).CampaignId);
     }
 
+    private static void RestoreRejectsActiveSaveSymlinkBeforeMutation()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var activeTarget = Path.Combine(temp.Path, "active-target.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(source, "campaign");
+        File.WriteAllText(active, "previous-active");
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+
+        switcher.Activate(metadata.CampaignId, DateTimeOffset.UtcNow);
+        File.Delete(active);
+        File.WriteAllText(activeTarget, "campaign");
+        CreateFileSymlink(active, activeTarget);
+
+        AssertEx.Throws<InvalidOperationException>(() => switcher.RestorePreviousActive(DateTimeOffset.UtcNow));
+        AssertIsReparsePoint(active);
+        AssertEx.Equal("campaign", File.ReadAllText(activeTarget));
+        AssertEx.True(File.Exists(state));
+    }
+
     private static void SyncBackMissingMetadataFailsBeforeMutatingPayload()
     {
         using var temp = new TempDirectory();
@@ -654,6 +730,25 @@ public static class ActiveSaveSwitcherTests
         var switcher = new ActiveSaveSwitcher(bank, active, Path.Combine(temp.Path, "active-state.json"));
 
         AssertEx.Throws<InvalidOperationException>(() => switcher.ClaimActiveSave(metadata.CampaignId, DateTimeOffset.UtcNow));
+    }
+
+    private static void ClaimRejectsActiveSaveSymlinkBeforeMutation()
+    {
+        using var temp = new TempDirectory();
+        var active = Path.Combine(temp.Path, "active.save");
+        var activeTarget = Path.Combine(temp.Path, "active-target.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(activeTarget, "new-campaign");
+        CreateFileSymlink(active, activeTarget);
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], activeTarget, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+
+        AssertEx.Throws<InvalidOperationException>(() => switcher.ClaimActiveSave(metadata.CampaignId, DateTimeOffset.UtcNow));
+        AssertIsReparsePoint(active);
+        AssertEx.Equal("new-campaign", File.ReadAllText(activeTarget));
+        AssertEx.False(File.Exists(state));
     }
 
     private static void RecoveryOffersDuplicateForUnmanagedActiveSave()
@@ -937,6 +1032,15 @@ public static class ActiveSaveSwitcherTests
 
         AssertEx.Equal(0, Directory.GetFiles(directory).Length);
     }
+
+    private static void CreateFileSymlink(string linkPath, string targetPath)
+    {
+        File.CreateSymbolicLink(linkPath, targetPath);
+        AssertIsReparsePoint(linkPath);
+    }
+
+    private static void AssertIsReparsePoint(string path) =>
+        AssertEx.True((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0, $"{path} is not a reparse point");
 
     private sealed class FakeCampaignMetadataExtractor(CampaignMetadataSnapshot snapshot) : ICampaignMetadataExtractor
     {

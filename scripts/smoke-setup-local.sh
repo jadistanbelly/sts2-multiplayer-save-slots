@@ -342,12 +342,14 @@ write_report() {
 - [ ] Confirm MultiplayerSaveSlots/index.json gains a new campaign id.
 - [ ] Re-open Host -> Standard and confirm the new campaign appears in the picker.
 - [ ] Confirm the picker shows real roster labels and omits progress when no safe act/floor value is available.
-- [ ] Open Details on a campaign row and confirm it shows progress, player count, timestamps, campaign id, and the full roster.
+- [ ] Select the campaign row and confirm the preview shows progress, player count, timestamps, campaign id, save fingerprint, and the full roster.
+- [ ] Confirm selected-character icons or badge fallbacks stay compact in the preview.
+- [ ] Press Continue and confirm the selected save loads.
 
 ### Expanded Roster And Recovery
 
 - [ ] With a 4+ player campaign, confirm roster labels compact as First, Second +N.
-- [ ] Open Details on a 4+ player campaign row and confirm it shows the full roster.
+- [ ] Select a 4+ player campaign row and confirm the preview shows the full roster without clipping.
 - [ ] Select an older Unknown party campaign, then re-open the picker and confirm metadata repair updates the row if STS2 exposes roster/progress data.
 - [ ] In an existing campaign's loaded-run lobby, change the participant set if possible, press Embark, and confirm the compatibility warning appears once before the next identical Embark attempt proceeds to vanilla validation.
 - [ ] With an unmanaged current_run_mp.save fixture applied, choose a host action and confirm the recovery modal offers Duplicate Active Save.
