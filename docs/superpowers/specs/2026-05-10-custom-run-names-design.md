@@ -66,4 +66,3 @@ Cover:
 - Clearing the name restores the generated roster label as title.
 - Controller rename persists changes and reports failures.
 - UI exposes a preview edit affordance and rename modal helper methods.
-
