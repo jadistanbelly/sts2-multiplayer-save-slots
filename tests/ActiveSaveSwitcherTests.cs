@@ -29,7 +29,9 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("sync-back rejects active save matching previous active checksum", SyncBackRejectsActiveSaveMatchingPreviousActiveChecksum));
         tests.Add(new TestCase("sync-back updates active state checksum after successful sync", SyncBackUpdatesActiveStateChecksumAfterSuccessfulSync));
         tests.Add(new TestCase("activation rejects unsynced active state before mutation", ActivationRejectsUnsyncedActiveStateBeforeMutation));
+        tests.Add(new TestCase("activation discards unsynced active state when campaign was deleted", ActivationDiscardsUnsyncedActiveStateWhenCampaignWasDeleted));
         tests.Add(new TestCase("activation allows switching when active state is clean", ActivationAllowsSwitchingWhenActiveStateIsClean));
+        tests.Add(new TestCase("active preflight allows replacement when campaign was deleted", ActivePreflightAllowsReplacementWhenCampaignWasDeleted));
         tests.Add(new TestCase("switcher restores previous active save after activation", RestoresPreviousActiveAfterActivation));
         tests.Add(new TestCase("switcher restore rejects changed activated save", RestoreRejectsChangedActivatedSave));
         tests.Add(new TestCase("switcher restore fails before mutating when previous state backup is missing", RestoreFailsBeforeMutatingWhenPreviousStateBackupMissing));
@@ -43,7 +45,7 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("switcher claim rejects active save symlink before mutation", ClaimRejectsActiveSaveSymlinkBeforeMutation));
         tests.Add(new TestCase("recovery offers duplicate for unmanaged active save", RecoveryOffersDuplicateForUnmanagedActiveSave));
         tests.Add(new TestCase("recovery offers sync for unsynced managed active save", RecoveryOffersSyncForUnsyncedManagedActiveSave));
-        tests.Add(new TestCase("recovery offers duplicate when unsynced campaign was deleted", RecoveryOffersDuplicateWhenUnsyncedCampaignWasDeleted));
+        tests.Add(new TestCase("recovery ignores unsynced active state when campaign was deleted", RecoveryIgnoresUnsyncedActiveStateWhenCampaignWasDeleted));
         tests.Add(new TestCase("recovery duplicates active save into bank", RecoveryDuplicatesActiveSaveIntoBank));
         tests.Add(new TestCase("recovery duplicates active save with captured metadata", RecoveryDuplicatesActiveSaveWithCapturedMetadata));
         tests.Add(new TestCase("recovery duplicates active save when metadata extractor fails", RecoveryDuplicatesActiveSaveWhenMetadataExtractorFails));
@@ -530,6 +532,35 @@ public static class ActiveSaveSwitcherTests
         AssertNoBackups(bank.GetBackupDirectory(metadataB.CampaignId));
     }
 
+    private static void ActivationDiscardsUnsyncedActiveStateWhenCampaignWasDeleted()
+    {
+        using var temp = new TempDirectory();
+        var sourceA = Path.Combine(temp.Path, "source-a.save");
+        var sourceB = Path.Combine(temp.Path, "source-b.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(sourceA, "campaign-a");
+        File.WriteAllText(sourceB, "campaign-b");
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadataA = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], sourceA, DateTimeOffset.UtcNow));
+        var metadataB = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], sourceB, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+
+        switcher.Activate(metadataA.CampaignId, DateTimeOffset.UtcNow);
+        File.WriteAllText(active, "campaign-a-progress");
+        bank.DeleteCampaign(metadataA.CampaignId);
+
+        switcher.Activate(metadataB.CampaignId, DateTimeOffset.UtcNow);
+
+        AssertEx.Equal("campaign-b", File.ReadAllText(active));
+        AssertEx.Equal(metadataB.CampaignId, JsonFile.Read<ActiveSaveState>(state).CampaignId);
+        AssertEx.False(File.Exists(bank.GetPayloadPath(metadataA.CampaignId)));
+        var campaigns = bank.ListCampaigns(MultiplayerGameMode.Standard);
+        AssertEx.Equal(1, campaigns.Count);
+        AssertEx.Equal(metadataB.CampaignId, campaigns[0].CampaignId);
+    }
+
     private static void ActivationAllowsSwitchingWhenActiveStateIsClean()
     {
         using var temp = new TempDirectory();
@@ -552,6 +583,30 @@ public static class ActiveSaveSwitcherTests
 
         var activeState = JsonFile.Read<ActiveSaveState>(state);
         AssertEx.Equal(metadataB.CampaignId, activeState.CampaignId);
+    }
+
+    private static void ActivePreflightAllowsReplacementWhenCampaignWasDeleted()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(source, "campaign");
+
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+        switcher.Activate(metadata.CampaignId, DateTimeOffset.UtcNow);
+        File.WriteAllText(active, "campaign-progress");
+        bank.DeleteCampaign(metadata.CampaignId);
+        var guard = new ActiveSaveReplacementGuard(
+            active,
+            state,
+            campaignId => File.Exists(bank.GetPayloadPath(campaignId)));
+
+        var result = guard.EnsureActiveSaveCanBeReplaced();
+
+        AssertEx.True(result.Success);
     }
 
     private static void RestoresPreviousActiveAfterActivation()
@@ -818,7 +873,7 @@ public static class ActiveSaveSwitcherTests
         AssertEx.Equal(ActiveSaveRecoveryActionKind.SyncActiveToCampaign, model.Options[0].Kind);
     }
 
-    private static void RecoveryOffersDuplicateWhenUnsyncedCampaignWasDeleted()
+    private static void RecoveryIgnoresUnsyncedActiveStateWhenCampaignWasDeleted()
     {
         using var temp = new TempDirectory();
         var source = Path.Combine(temp.Path, "source.save");
@@ -835,9 +890,8 @@ public static class ActiveSaveSwitcherTests
 
         var model = recovery.BuildRecoveryModel(MultiplayerGameMode.Standard);
 
-        AssertEx.True(model.HasOptions);
-        AssertEx.True(model.Message.Contains("no longer exists", StringComparison.Ordinal));
-        AssertEx.Equal(ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign, model.Options[0].Kind);
+        AssertEx.False(model.HasOptions);
+        AssertEx.Equal("No recovery action is available.", model.Message);
     }
 
     private static void RecoveryDuplicatesActiveSaveIntoBank()

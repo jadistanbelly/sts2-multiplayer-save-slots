@@ -78,8 +78,10 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
             if (activeChecksum == state.ActiveChecksumAfterActivation)
                 return ActiveSaveRecoveryModel.None();
 
-            if (!CanSyncToStoredCampaign(state))
-                return DuplicateModel("The campaign for the active save no longer exists. Duplicate the active save before switching slots.");
+            if (!HasStoredCampaignPayload(state.CampaignId))
+                return ActiveSaveRecoveryModel.None();
+
+            EnsureStoredCampaignCanSync(state);
 
             return new ActiveSaveRecoveryModel(
                 "Active multiplayer save has unsynced changes",
@@ -96,28 +98,19 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
             Console.Error.WriteLine($"[MultiplayerSaveSlots] Active save path safety check failed: {ex.Message}");
             return ActiveSaveRecoveryModel.None();
         }
-        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException or ArgumentException)
         {
             return DuplicateModel($"Active save state cannot be verified: {ex.Message}");
         }
     }
 
-    private bool CanSyncToStoredCampaign(ActiveSaveState state)
-    {
-        try
-        {
-            var payloadPath = _bank.GetPayloadPath(state.CampaignId);
-            if (!File.Exists(payloadPath))
-                return false;
+    private bool HasStoredCampaignPayload(string campaignId) =>
+        File.Exists(_bank.GetPayloadPath(campaignId));
 
-            _bank.GetCampaign(state.CampaignId);
-            _bank.EnsureCampaignIndexed(state.CampaignId);
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException or ArgumentException)
-        {
-            return false;
-        }
+    private void EnsureStoredCampaignCanSync(ActiveSaveState state)
+    {
+        _bank.GetCampaign(state.CampaignId);
+        _bank.EnsureCampaignIndexed(state.CampaignId);
     }
 
     public OperationResult Recover(ActiveSaveRecoveryActionKind action, MultiplayerGameMode gameMode, DateTimeOffset nowUtc)

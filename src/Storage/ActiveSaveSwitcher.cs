@@ -31,8 +31,11 @@ public sealed class ActiveSaveSwitcher
         {
             var existingState = JsonFile.Read<ActiveSaveState>(_statePath);
             var currentActiveChecksum = FileChecksum.Sha256(_activeSavePath);
-            if (currentActiveChecksum != existingState.ActiveChecksumAfterActivation)
+            if (currentActiveChecksum != existingState.ActiveChecksumAfterActivation &&
+                HasStoredCampaignPayload(existingState.CampaignId))
+            {
                 throw new InvalidOperationException("Active save has unsynced changes");
+            }
         }
 
         var activeSaveDirectory = Path.GetDirectoryName(_activeSavePath);
@@ -217,6 +220,9 @@ public sealed class ActiveSaveSwitcher
         StoragePathGuard.EnsurePathInsideDirectory(_statePath, activeSaveDirectory, "active save state path");
         StoragePathGuard.EnsureSafeFilePath(_statePath, "active save state path");
     }
+
+    private bool HasStoredCampaignPayload(string campaignId) =>
+        File.Exists(_bank.GetPayloadPath(campaignId));
 
     private void EnsureStateBackupPathSafe(string campaignId, string? backupPath, string description)
     {
