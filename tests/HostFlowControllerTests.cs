@@ -66,6 +66,8 @@ public static class HostFlowControllerTests
         yield return new TestCase("recovery model reports unavailable when no options exist", RecoveryModelReportsUnavailableWhenNoOptionsExist);
         yield return new TestCase("controller archives selected campaign", ControllerArchivesSelectedCampaign);
         yield return new TestCase("controller reports archive campaign failure", ControllerReportsArchiveCampaignFailure);
+        yield return new TestCase("controller renames selected campaign", ControllerRenamesSelectedCampaign);
+        yield return new TestCase("controller reports rename campaign failure", ControllerReportsRenameCampaignFailure);
         yield return new TestCase("controller restores archived campaign", ControllerRestoresArchivedCampaign);
         yield return new TestCase("controller reports restore archived campaign failure", ControllerReportsRestoreArchivedCampaignFailure);
         yield return new TestCase("controller permanently deletes active campaign", ControllerPermanentlyDeletesActiveCampaign);
@@ -1122,6 +1124,31 @@ public static class HostFlowControllerTests
         AssertEx.Equal("archive failed", result.ErrorMessage);
     }
 
+    private static void ControllerRenamesSelectedCampaign()
+    {
+        var bank = new FakeHostFlowSaveBank();
+
+        var result = CreateController(bank).RenameCampaign(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "  Friday Poison Run  ");
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", bank.RenamedCampaignId);
+        AssertEx.Equal("  Friday Poison Run  ", bank.RenamedCustomName);
+    }
+
+    private static void ControllerReportsRenameCampaignFailure()
+    {
+        var bank = new FakeHostFlowSaveBank { RenameFailure = "rename failed" };
+
+        var result = CreateController(bank).RenameCampaign(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "Friday Poison Run");
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("rename failed", result.ErrorMessage);
+    }
+
     private static void ControllerRestoresArchivedCampaign()
     {
         var bank = new FakeHostFlowSaveBank();
@@ -1250,6 +1277,9 @@ public static class HostFlowControllerTests
         public string? ArchiveFailure { get; init; }
         public string? RestoredArchiveKey { get; private set; }
         public string? RestoreArchiveFailure { get; init; }
+        public string? RenamedCampaignId { get; private set; }
+        public string? RenamedCustomName { get; private set; }
+        public string? RenameFailure { get; init; }
         public string? DeletedCampaignId { get; private set; }
         public string? DeleteCampaignFailure { get; init; }
         public string? DeletedArchiveKey { get; private set; }
@@ -1281,6 +1311,17 @@ public static class HostFlowControllerTests
 
             RestoredArchiveKey = archiveKey;
             return ArchivedCampaigns.FirstOrDefault(archived => archived.ArchiveKey == archiveKey)?.Metadata
+                ?? CampaignWithRoster([]);
+        }
+
+        public CampaignMetadata RenameCampaign(string campaignId, string? customName)
+        {
+            if (RenameFailure is not null)
+                throw new InvalidOperationException(RenameFailure);
+
+            RenamedCampaignId = campaignId;
+            RenamedCustomName = customName;
+            return Campaigns.FirstOrDefault(campaign => campaign.CampaignId == campaignId)
                 ?? CampaignWithRoster([]);
         }
 

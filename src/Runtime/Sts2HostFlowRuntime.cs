@@ -44,6 +44,9 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
     public CampaignMetadata RestoreArchivedCampaign(string archiveKey) =>
         _bank.RestoreArchivedCampaign(archiveKey);
 
+    public CampaignMetadata RenameCampaign(string campaignId, string? customName) =>
+        _bank.RenameCampaign(campaignId, customName);
+
     public void DeleteCampaign(string campaignId) =>
         _bank.DeleteCampaign(campaignId);
 
