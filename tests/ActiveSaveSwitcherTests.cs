@@ -43,6 +43,7 @@ public static class ActiveSaveSwitcherTests
         tests.Add(new TestCase("switcher claim rejects active save symlink before mutation", ClaimRejectsActiveSaveSymlinkBeforeMutation));
         tests.Add(new TestCase("recovery offers duplicate for unmanaged active save", RecoveryOffersDuplicateForUnmanagedActiveSave));
         tests.Add(new TestCase("recovery offers sync for unsynced managed active save", RecoveryOffersSyncForUnsyncedManagedActiveSave));
+        tests.Add(new TestCase("recovery offers duplicate when unsynced campaign was deleted", RecoveryOffersDuplicateWhenUnsyncedCampaignWasDeleted));
         tests.Add(new TestCase("recovery duplicates active save into bank", RecoveryDuplicatesActiveSaveIntoBank));
         tests.Add(new TestCase("recovery duplicates active save with captured metadata", RecoveryDuplicatesActiveSaveWithCapturedMetadata));
         tests.Add(new TestCase("recovery duplicates active save when metadata extractor fails", RecoveryDuplicatesActiveSaveWhenMetadataExtractorFails));
@@ -815,6 +816,28 @@ public static class ActiveSaveSwitcherTests
         AssertEx.True(model.HasOptions);
         AssertEx.Equal("Active multiplayer save has unsynced changes", model.Title);
         AssertEx.Equal(ActiveSaveRecoveryActionKind.SyncActiveToCampaign, model.Options[0].Kind);
+    }
+
+    private static void RecoveryOffersDuplicateWhenUnsyncedCampaignWasDeleted()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        var active = Path.Combine(temp.Path, "active.save");
+        var state = Path.Combine(temp.Path, "active-state.json");
+        File.WriteAllText(source, "campaign");
+        var bank = new MultiplayerSaveBank(new SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(MultiplayerGameMode.Standard, [], source, DateTimeOffset.UtcNow));
+        var switcher = new ActiveSaveSwitcher(bank, active, state);
+        switcher.Activate(metadata.CampaignId, DateTimeOffset.UtcNow);
+        File.WriteAllText(active, "campaign-progress");
+        bank.DeleteCampaign(metadata.CampaignId);
+        var recovery = new ActiveSaveRecoveryService(bank, switcher, active, state);
+
+        var model = recovery.BuildRecoveryModel(MultiplayerGameMode.Standard);
+
+        AssertEx.True(model.HasOptions);
+        AssertEx.True(model.Message.Contains("no longer exists", StringComparison.Ordinal));
+        AssertEx.Equal(ActiveSaveRecoveryActionKind.DuplicateActiveIntoCampaign, model.Options[0].Kind);
     }
 
     private static void RecoveryDuplicatesActiveSaveIntoBank()

@@ -78,6 +78,9 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
             if (activeChecksum == state.ActiveChecksumAfterActivation)
                 return ActiveSaveRecoveryModel.None();
 
+            if (!CanSyncToStoredCampaign(state))
+                return DuplicateModel("The campaign for the active save no longer exists. Duplicate the active save before switching slots.");
+
             return new ActiveSaveRecoveryModel(
                 "Active multiplayer save has unsynced changes",
                 "Sync the active save back to its selected campaign before switching slots.",
@@ -96,6 +99,24 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
         catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
         {
             return DuplicateModel($"Active save state cannot be verified: {ex.Message}");
+        }
+    }
+
+    private bool CanSyncToStoredCampaign(ActiveSaveState state)
+    {
+        try
+        {
+            var payloadPath = _bank.GetPayloadPath(state.CampaignId);
+            if (!File.Exists(payloadPath))
+                return false;
+
+            _bank.GetCampaign(state.CampaignId);
+            _bank.EnsureCampaignIndexed(state.CampaignId);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException or ArgumentException)
+        {
+            return false;
         }
     }
 
