@@ -111,26 +111,6 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             actions.AddChild(clearDeleted);
         }
 
-        _deleteButton = new Button
-        {
-            Text = "Delete",
-            Disabled = _selectedCampaign is null,
-            CustomMinimumSize = new Vector2(140, 46)
-        };
-        ModalUiStyling.StyleDangerButton(_deleteButton);
-        _deleteButton.Pressed += ShowDeleteConfirmation;
-        actions.AddChild(_deleteButton);
-
-        _continueButton = new Button
-        {
-            Text = "Continue",
-            Disabled = _selectedCampaign is null,
-            CustomMinimumSize = new Vector2(190, 46)
-        };
-        ModalUiStyling.StylePrimaryButton(_continueButton);
-        _continueButton.Pressed += ContinueSelectedCampaign;
-        actions.AddChild(_continueButton);
-
         _defaultFocusedControl ??= cancel;
     }
 
@@ -257,12 +237,9 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     private void SelectCampaignPreview(MultiplayerSavePickerRow row)
     {
         _selectedCampaign = row.Kind == PickerRowKind.Campaign ? row : null;
-        if (_continueButton is not null)
-            _continueButton.Disabled = _selectedCampaign is null;
-        if (_deleteButton is not null)
-            _deleteButton.Disabled = _selectedCampaign is null;
 
         RenderPreview(_selectedCampaign);
+        SetSelectedCampaignActionsEnabled();
         if (_selectedCampaign?.CampaignId is { } campaignId
             && _campaignButtons.TryGetValue(campaignId, out var button))
         {
@@ -292,6 +269,47 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             return;
 
         SelectRow(_selectedCampaign);
+    }
+
+    private Control CreateSelectedCampaignActions()
+    {
+        var actions = new HBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        actions.AddThemeConstantOverride("separation", 10);
+
+        _deleteButton = new Button
+        {
+            Text = "Delete",
+            CustomMinimumSize = new Vector2(150, 44)
+        };
+        ModalUiStyling.StyleDangerButton(_deleteButton);
+        _deleteButton.Pressed += ShowDeleteConfirmation;
+        actions.AddChild(_deleteButton);
+
+        actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
+
+        _continueButton = new Button
+        {
+            Text = "Continue",
+            CustomMinimumSize = new Vector2(190, 44)
+        };
+        ModalUiStyling.StylePrimaryButton(_continueButton);
+        _continueButton.Pressed += ContinueSelectedCampaign;
+        actions.AddChild(_continueButton);
+
+        SetSelectedCampaignActionsEnabled();
+        return actions;
+    }
+
+    private void SetSelectedCampaignActionsEnabled()
+    {
+        var disabled = _selectedCampaign is null;
+        if (_deleteButton is not null)
+            _deleteButton.Disabled = disabled;
+        if (_continueButton is not null)
+            _continueButton.Disabled = disabled;
     }
 
     private void ShowDeleteConfirmation()
@@ -416,6 +434,8 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             return;
 
         ClearChildren(_previewRoot);
+        _continueButton = null;
+        _deleteButton = null;
 
         if (row?.Details is null)
         {
@@ -449,6 +469,8 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         content.AddChild(CreatePreviewSectionTitle("Run Details"));
         foreach (var line in details.SummaryLines)
             content.AddChild(CreatePreviewLabel(line, 16, HorizontalAlignment.Left));
+
+        _previewRoot.AddChild(CreateSelectedCampaignActions());
     }
 
     private static VBoxContainer CreatePreviewContent()

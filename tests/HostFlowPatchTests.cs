@@ -27,6 +27,7 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal wraps character indicators in fixed slot", PickerModalWrapsCharacterIndicatorsInFixedSlot);
         yield return new TestCase("picker modal exposes split panel helpers", PickerModalExposesSplitPanelHelpers);
         yield return new TestCase("picker modal exposes delete helpers", PickerModalExposesDeleteHelpers);
+        yield return new TestCase("picker modal exposes selected save action helpers", PickerModalExposesSelectedSaveActionHelpers);
         yield return new TestCase("modal styling exposes action button variants", ModalStylingExposesActionButtonVariants);
         yield return new TestCase("recovery modal exposes explicit UI builder", RecoveryModalExposesExplicitUiBuilder);
         yield return new TestCase("RMP host compatibility opens picker before direct host", RmpHostCompatibilityOpensPickerBeforeDirectHost);
@@ -329,6 +330,22 @@ public static class HostFlowPatchTests
             "DeleteSelectedCampaign",
             "ClearDeletedCampaigns",
             "RefreshPicker"
+        })
+        {
+            var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+    }
+
+    private static void PickerModalExposesSelectedSaveActionHelpers()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+
+        foreach (var methodName in new[]
+        {
+            "CreateSelectedCampaignActions",
+            "SetSelectedCampaignActionsEnabled"
         })
         {
             var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
