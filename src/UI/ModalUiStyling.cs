@@ -85,7 +85,12 @@ internal static class ModalUiStyling
 
     public static void StyleBadgePanel(PanelContainer panel)
     {
-        panel.AddThemeStyleboxOverride("panel", CreateButtonStyle(ButtonBackground, PanelBorder, 2));
+        panel.AddThemeStyleboxOverride("panel", CreateBadgeStyle());
+    }
+
+    public static void StyleIconSlotPanel(PanelContainer panel)
+    {
+        panel.AddThemeStyleboxOverride("panel", CreateTransparentStyle());
     }
 
     public static void StylePreviewFrame(PanelContainer panel)
@@ -128,6 +133,32 @@ internal static class ModalUiStyling
         style.SetBorderWidthAll(borderWidth);
         style.SetCornerRadiusAll(6);
         style.SetContentMarginAll(10);
+        return style;
+    }
+
+    private static StyleBoxFlat CreateBadgeStyle()
+    {
+        var style = new StyleBoxFlat
+        {
+            BgColor = ButtonBackground,
+            BorderColor = PanelBorder
+        };
+        style.SetBorderWidthAll(2);
+        style.SetCornerRadiusAll(5);
+        style.SetContentMarginAll(0);
+        return style;
+    }
+
+    private static StyleBoxFlat CreateTransparentStyle()
+    {
+        var style = new StyleBoxFlat
+        {
+            BgColor = new Color(0f, 0f, 0f, 0f),
+            BorderColor = new Color(0f, 0f, 0f, 0f)
+        };
+        style.SetBorderWidthAll(0);
+        style.SetCornerRadiusAll(0);
+        style.SetContentMarginAll(0);
         return style;
     }
 }

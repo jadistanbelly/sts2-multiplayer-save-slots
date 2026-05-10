@@ -24,6 +24,7 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal maps native character icon paths", PickerModalMapsNativeCharacterIconPaths);
         yield return new TestCase("picker modal exposes badge fallback helper", PickerModalExposesBadgeFallbackHelper);
         yield return new TestCase("picker modal constrains character icon texture size", PickerModalConstrainsCharacterIconTextureSize);
+        yield return new TestCase("picker modal wraps character indicators in fixed slot", PickerModalWrapsCharacterIndicatorsInFixedSlot);
         yield return new TestCase("picker modal exposes split panel helpers", PickerModalExposesSplitPanelHelpers);
         yield return new TestCase("recovery modal exposes explicit UI builder", RecoveryModalExposesExplicitUiBuilder);
         yield return new TestCase("RMP host compatibility opens picker before direct host", RmpHostCompatibilityOpensPickerBeforeDirectHost);
@@ -262,6 +263,25 @@ public static class HostFlowPatchTests
         AssertEx.Equal("Godot.TextureRect", createCharacterIconTextureRect.ReturnType.FullName);
     }
 
+    private static void PickerModalWrapsCharacterIndicatorsInFixedSlot()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var getCharacterIconSize = modalType!.GetMethod("GetCharacterIconSize", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("GetCharacterIconSize helper was not found");
+        var createCharacterIconSlot = modalType.GetMethod("CreateCharacterIconSlot", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("CreateCharacterIconSlot helper was not found");
+        var createCharacterIndicator = modalType.GetMethod("CreateCharacterIndicator", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("CreateCharacterIndicator helper was not found");
+
+        var iconSize = getCharacterIconSize.Invoke(null, [])!;
+
+        AssertEx.Equal("Godot.PanelContainer", createCharacterIconSlot.ReturnType.FullName);
+        AssertEx.Equal("Godot.Control", createCharacterIndicator.ReturnType.FullName);
+        AssertEx.Equal(42f, GetVector2Component(iconSize, "X"));
+        AssertEx.Equal(42f, GetVector2Component(iconSize, "Y"));
+    }
+
     private static float GetVector2Component(object vector, string name)
     {
         var type = vector.GetType();
@@ -280,9 +300,12 @@ public static class HostFlowPatchTests
         {
             "BuildCampaignList",
             "BuildPreviewPanel",
+            "CreateCampaignListFrame",
+            "CreatePreviewContent",
             "SelectCampaignPreview",
             "ContinueSelectedCampaign",
             "CreatePreviewSectionTitle",
+            "CreateRosterPreviewRow",
             "CreatePreviewFrame",
             "SetSelectedCampaignButton"
         })

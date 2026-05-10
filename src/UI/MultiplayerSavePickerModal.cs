@@ -113,12 +113,15 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private Control BuildCampaignList()
     {
+        var frame = CreateCampaignListFrame();
         var list = new VBoxContainer
         {
-            CustomMinimumSize = new Vector2(420, 430),
+            CustomMinimumSize = new Vector2(400, 430),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
         list.AddThemeConstantOverride("separation", 8);
+        frame.AddChild(list);
 
         var startNewRow = _model.Rows.FirstOrDefault(row => row.Kind == PickerRowKind.StartNewRun)
             ?? MultiplayerSavePickerRow.StartNew();
@@ -144,7 +147,20 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         foreach (var row in _model.CampaignRows)
             AddCampaignRow(rows, row);
 
-        return list;
+        return frame;
+    }
+
+    private static PanelContainer CreateCampaignListFrame()
+    {
+        var frame = new PanelContainer
+        {
+            CustomMinimumSize = new Vector2(430, 450),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            ClipContents = true
+        };
+        ModalUiStyling.StylePreviewFrame(frame);
+        return frame;
     }
 
     private void AddCampaignRow(VBoxContainer rows, MultiplayerSavePickerRow row)
@@ -177,7 +193,8 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         {
             CustomMinimumSize = new Vector2(460, 430),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            ClipContents = true
         };
         _previewRoot.AddThemeConstantOverride("separation", 9);
         frame.AddChild(_previewRoot);
@@ -191,7 +208,8 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         {
             CustomMinimumSize = new Vector2(480, 450),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            ClipContents = true
         };
         ModalUiStyling.StylePreviewFrame(frame);
         return frame;
@@ -273,11 +291,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         };
         _previewRoot.AddChild(scroll);
 
-        var content = new VBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        content.AddThemeConstantOverride("separation", 7);
+        var content = CreatePreviewContent();
         scroll.AddChild(content);
 
         content.AddChild(CreatePreviewSectionTitle("Party"));
@@ -290,7 +304,17 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
         content.AddChild(CreatePreviewSectionTitle("Run Details"));
         foreach (var line in details.SummaryLines)
-            content.AddChild(CreatePreviewLabel(line, 17, HorizontalAlignment.Left));
+            content.AddChild(CreatePreviewLabel(line, 16, HorizontalAlignment.Left));
+    }
+
+    private static VBoxContainer CreatePreviewContent()
+    {
+        var content = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        content.AddThemeConstantOverride("separation", 7);
+        return content;
     }
 
     private static Control CreateRosterPreviewRow(MultiplayerSavePickerRosterEntry entry)
@@ -304,7 +328,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         if (entry.HasKnownPlayer)
             row.AddChild(CreateCharacterIndicator(entry.SelectedCharacterId, entry.BadgeText));
 
-        var label = CreatePreviewLabel(entry.Text, 18, HorizontalAlignment.Left);
+        var label = CreatePreviewLabel(entry.Text, 17, HorizontalAlignment.Left);
         label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         row.AddChild(label);
         return row;
@@ -377,7 +401,9 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     {
         var panel = new PanelContainer
         {
-            CustomMinimumSize = GetCharacterIconSize()
+            CustomMinimumSize = new Vector2(38, 38),
+            SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
         };
         ModalUiStyling.StyleBadgePanel(panel);
 
@@ -386,7 +412,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             Text = string.IsNullOrWhiteSpace(badgeText) ? "?" : badgeText,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            CustomMinimumSize = GetCharacterIconSize()
+            CustomMinimumSize = new Vector2(38, 38)
         };
         ModalUiStyling.StyleBody(label, 16);
         panel.AddChild(label);
@@ -400,17 +426,34 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             ExpandMode = GetCharacterIconExpandMode(),
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
             CustomMinimumSize = GetCharacterIconSize(),
+            Size = GetCharacterIconSize(),
             SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
             SizeFlagsVertical = SizeFlags.ShrinkBegin
         };
+
+    private static PanelContainer CreateCharacterIconSlot(Control child)
+    {
+        var slot = new PanelContainer
+        {
+            CustomMinimumSize = GetCharacterIconSize(),
+            Size = GetCharacterIconSize(),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+            SizeFlagsVertical = SizeFlags.ShrinkBegin,
+            ClipContents = true,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        ModalUiStyling.StyleIconSlotPanel(slot);
+        slot.AddChild(child);
+        return slot;
+    }
 
     private static Control CreateCharacterIndicator(string? selectedCharacterId, string badgeText)
     {
         var texture = TryLoadCharacterIcon(selectedCharacterId);
         if (texture is null)
-            return CreateCharacterBadge(badgeText);
+            return CreateCharacterIconSlot(CreateCharacterBadge(badgeText));
 
-        return CreateCharacterIconTextureRect(texture);
+        return CreateCharacterIconSlot(CreateCharacterIconTextureRect(texture));
     }
 
     private void ShowDetails(MultiplayerSavePickerDetails details)
