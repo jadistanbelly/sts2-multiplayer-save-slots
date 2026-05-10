@@ -54,7 +54,8 @@ public sealed record MultiplayerSavePickerDetails(
     string Title,
     string Subtitle,
     IReadOnlyList<string> SummaryLines,
-    IReadOnlyList<string> RosterLines)
+    IReadOnlyList<string> RosterLines,
+    string? AutoLabel = null)
 {
     public IReadOnlyList<MultiplayerSavePickerRosterEntry> RosterEntries { get; init; } = [];
 }
@@ -92,26 +93,28 @@ public sealed record MultiplayerSavePickerRow(
     public static MultiplayerSavePickerRow Campaign(CampaignMetadata metadata)
     {
         var subtitle = BuildSubtitle(metadata);
+        var title = DisplayTitle(metadata);
 
         return new MultiplayerSavePickerRow(
             PickerRowKind.Campaign,
-            metadata.Label,
+            title,
             subtitle,
             metadata.CampaignId,
-            BuildDetails(metadata, subtitle));
+            BuildDetails(metadata, title, subtitle));
     }
 
     public static MultiplayerSavePickerRow ArchivedCampaign(MultiplayerSaveSlots.Core.ArchivedCampaign archived)
     {
         var metadata = archived.Metadata;
         var subtitle = BuildSubtitle(metadata);
+        var title = DisplayTitle(metadata);
 
         return new MultiplayerSavePickerRow(
             PickerRowKind.ArchivedCampaign,
-            metadata.Label,
+            title,
             subtitle,
             metadata.CampaignId,
-            BuildDetails(metadata, subtitle),
+            BuildDetails(metadata, title, subtitle),
             archived.ArchiveKey);
     }
 
@@ -147,7 +150,7 @@ public sealed record MultiplayerSavePickerRow(
             Details = Details is null ? null : Details with { Subtitle = subtitle }
         };
 
-    private static MultiplayerSavePickerDetails BuildDetails(CampaignMetadata metadata, string subtitle)
+    private static MultiplayerSavePickerDetails BuildDetails(CampaignMetadata metadata, string title, string subtitle)
     {
         var progress = string.IsNullOrWhiteSpace(metadata.ActOrFloor) ? "Unknown" : metadata.ActOrFloor.Trim();
         var summaryLines = new[]
@@ -170,12 +173,18 @@ public sealed record MultiplayerSavePickerRow(
                     true))
                 .ToArray();
         var rosterLines = rosterEntries.Select(entry => entry.Text).ToArray();
+        var autoLabel = string.Equals(title, metadata.Label, StringComparison.Ordinal)
+            ? null
+            : metadata.Label;
 
-        return new MultiplayerSavePickerDetails(metadata.Label, subtitle, summaryLines, rosterLines)
+        return new MultiplayerSavePickerDetails(title, subtitle, summaryLines, rosterLines, autoLabel)
         {
             RosterEntries = rosterEntries
         };
     }
+
+    private static string DisplayTitle(CampaignMetadata metadata) =>
+        string.IsNullOrWhiteSpace(metadata.CustomName) ? metadata.Label : metadata.CustomName.Trim();
 
     private static string DisplayName(PlayerIdentity player) =>
         FormatPlayerName(player, CharacterDisplayName(player.SelectedCharacterId));

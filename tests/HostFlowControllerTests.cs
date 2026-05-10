@@ -25,6 +25,8 @@ public static class HostFlowControllerTests
         yield return new TestCase("controller disambiguates duplicate picker rows", ControllerDisambiguatesDuplicatePickerRows);
         yield return new TestCase("picker subtitle omits unknown progress", PickerSubtitleOmitsUnknownProgress);
         yield return new TestCase("picker campaign row includes full details", PickerCampaignRowIncludesFullDetails);
+        yield return new TestCase("picker campaign row uses custom run name", PickerCampaignRowUsesCustomRunName);
+        yield return new TestCase("picker campaign row falls back when custom run name is cleared", PickerCampaignRowFallsBackWhenCustomRunNameCleared);
         yield return new TestCase("picker details show selected characters", PickerDetailsShowSelectedCharacters);
         yield return new TestCase("picker details handle missing progress and roster", PickerDetailsHandleMissingProgressAndRoster);
         yield return new TestCase("picker start new row has no details", PickerStartNewRowHasNoDetails);
@@ -460,6 +462,44 @@ public static class HostFlowControllerTests
         AssertEx.Equal("2. buddy2", details.RosterLines[1]);
         AssertEx.Equal("3. buddy3", details.RosterLines[2]);
         AssertEx.Equal("4. buddy4", details.RosterLines[3]);
+    }
+
+    private static void PickerCampaignRowUsesCustomRunName()
+    {
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard,
+            "phatstatss, Magical Crocs",
+            [new PlayerIdentity("steam:1", "phatstatss"), new PlayerIdentity("steam:2", "Magical Crocs")],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T01:00:00Z"),
+            null,
+            "payload",
+            "Floor 5",
+            "Friday Poison Run"));
+
+        AssertEx.Equal("Friday Poison Run", row.Title);
+        AssertEx.Equal("Floor 5 - 2 players", row.Subtitle);
+        AssertEx.Equal("Friday Poison Run", row.Details!.Title);
+        AssertEx.Equal("phatstatss, Magical Crocs", row.Details.AutoLabel);
+    }
+
+    private static void PickerCampaignRowFallsBackWhenCustomRunNameCleared()
+    {
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard,
+            "phatstatss, Magical Crocs",
+            [new PlayerIdentity("steam:1", "phatstatss"), new PlayerIdentity("steam:2", "Magical Crocs")],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T01:00:00Z"),
+            null,
+            "payload",
+            "Floor 5",
+            null));
+
+        AssertEx.Equal("phatstatss, Magical Crocs", row.Title);
+        AssertEx.Equal(null, row.Details!.AutoLabel);
     }
 
     private static void PickerDetailsShowSelectedCharacters()
