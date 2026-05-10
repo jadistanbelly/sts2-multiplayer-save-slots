@@ -1,140 +1,110 @@
 # Multiplayer Save Slots
 
-Slay the Spire 2 mod in development to let a host keep multiple multiplayer campaign saves instead of abandoning the single vanilla co-op save.
+Host-side Slay the Spire 2 mod for keeping separate multiplayer campaign saves. It manages the host's local `current_run_mp.save` file so different groups or runs do not overwrite the same vanilla co-op save.
 
-## Status
+## Current Release
 
-Private development. Current work adds a split-panel save picker so existing campaigns can be previewed before continuing.
+Latest release: [v0.1.0](https://github.com/jadistanbelly/sts2-multiplayer-save-slots/releases/tag/v0.1.0)
 
-The picker can start a new vanilla run or activate an existing campaign payload from the save bank before resuming the vanilla host flow. After vanilla writes `current_run_mp.save`, the mod syncs existing selected campaigns back to the bank and finalizes newly started runs as separate bank campaigns.
+Download `MultiplayerSaveSlots-v0.1.0.zip`, then extract the included `MultiplayerSaveSlots/` folder into your STS2 `mods/` directory.
 
-If an active multiplayer save is unmanaged or has unsynced changes, the picker now offers conservative recovery actions before continuing. It can duplicate an unmanaged active save into the bank or sync active changes back to the owning campaign.
+## What It Does
 
-Newly finalized or duplicated runs use live lobby/save metadata where STS2 exposes it. Campaign titles compact large rosters as `First, Second +N`, picker subtitles include best-effort progress such as `Floor 18` when safely readable, and duplicate-looking rows gain a short campaign id suffix. Selecting a campaign row updates the picker preview with the full stored roster, selected characters when captured, timestamps, a short campaign id, and a save fingerprint. The preview uses STS2 character icons at runtime when available and falls back to compact native-styled badges. Older `Unknown party` campaigns can self-repair missing display metadata after they are selected and safely activated. When an existing loaded-run lobby's current participant ids differ from the selected campaign roster, the mod shows an embark-time compatibility warning once before deferring back to vanilla validation.
+- Adds a save picker after `Multiplayer -> Host -> Standard/Daily/Custom`.
+- Starts a new managed multiplayer campaign or continues an existing one.
+- Swaps the selected campaign payload into STS2's active multiplayer save before loading.
+- Syncs the active save back to the selected campaign after STS2 writes progress.
+- Shows roster, progress, timestamps, short campaign id, save fingerprint, and selected characters when STS2 metadata is readable.
+- Adds recovery choices for unmanaged or unsynced active multiplayer saves.
+- Warns before embarking when the loaded-run lobby participants do not match the selected campaign roster.
 
-## Design
+## Save Safety
 
-See `docs/superpowers/specs/2026-05-08-multiplayer-save-slots-design.md`.
+The mod treats active save replacement as a data-loss risk and fails closed when it cannot prove the operation is safe.
 
-## Build
+- Active saves, active-state files, and campaign payloads are backed up before replacement.
+- Symlinks and reparse points are rejected in active save, state, bank, metadata, payload, and backup paths.
+- Tampered restore backup paths are rejected before mutation.
+- Malformed or mismatched campaign metadata is skipped instead of blocking picker rendering.
+- If an active multiplayer save is unmanaged, the mod offers to duplicate it into the save bank before continuing.
+- If a managed active save has unsynced changes, the mod offers to sync it back to its campaign before switching slots.
 
-Requires a .NET SDK that can target `net9.0` and Slay the Spire 2 installed through Steam.
+## How To Use
 
-```bash
-dotnet build MultiplayerSaveSlots.sln
-dotnet run --project tests/MultiplayerSaveSlots.Tests.csproj
+1. Launch STS2 with mods enabled.
+2. Open `Multiplayer -> Host`.
+3. Choose `Standard`, `Daily`, or `Custom`.
+4. In `Multiplayer Saves`, choose `Start New Run` or select an existing campaign row.
+5. For an existing campaign, inspect the preview and press `Continue`.
+6. If a recovery prompt appears, choose `Duplicate Active Save` or `Sync Active Save` before switching.
+
+STS2 does not create a multiplayer save from a solo host lobby. A run must actually begin with at least one joined player before STS2 writes `current_run_mp.save` and the mod can finalize a new save slot.
+
+## Save Bank Location
+
+The save bank is stored beside STS2's active multiplayer save:
+
+```text
+<profile saves>/
+  current_run_mp.save
+  MultiplayerSaveSlots/
+    index.json
+    active-state.json
+    saves/
+      <campaign-id>/
+        metadata.json
+        multiplayer_run.save
+        backup/
 ```
 
-If your machine has the .NET 9 targeting pack but only a newer runtime installed, run with:
+## Known Limits
+
+- This is local host save management, not cloud sync or cross-host campaign transfer.
+- Roster, character, and progress labels are best-effort because they depend on what STS2 exposes in current lobby/save data.
+- Older saves can appear as `Unknown party` until they are selected and metadata repair can read live STS2 data.
+- UI polish is still early; the current priority is safe save switching.
+
+## Build And Test
+
+Requires a .NET SDK that can target `net9.0` and a local Slay the Spire 2 Steam install because the project references STS2 assemblies.
 
 ```bash
 DOTNET_ROLL_FORWARD=Major dotnet build MultiplayerSaveSlots.sln
 DOTNET_ROLL_FORWARD=Major dotnet run --project tests/MultiplayerSaveSlots.Tests.csproj
+tests/smoke-setup-local-tests.sh
 ```
 
-## Release
+## Package And Release
 
-Releases are built locally because the project references STS2 assemblies from a local game install. A normal GitHub-hosted runner does not have `sts2.dll`, `GodotSharp.dll`, or `0Harmony.dll`.
-
-Package validation requires:
-
-- .NET SDK that can target `net9.0`
-- `python3`
-- `git`
-- Slay the Spire 2 installed in the path used by `MultiplayerSaveSlots.csproj`
-
-Publishing a full release additionally requires authenticated GitHub CLI via `gh auth login`.
-
-Before running either release command, update `MultiplayerSaveSlots.json` so its `version` matches the release tag without the leading `v`.
-
-Validate the package without creating a tag or GitHub Release:
+Create a local package without tagging:
 
 ```bash
 scripts/release-local.sh --package-only v0.1.0
 ```
 
-Publish a real release from a clean, synced `main` checkout:
+Publish a full release from a clean, synced `main` checkout:
 
 ```bash
 scripts/release-local.sh v0.1.0
 ```
 
-The published asset is a drop-in zip named `MultiplayerSaveSlots-vX.Y.Z.zip`. Users should extract the included `MultiplayerSaveSlots/` folder into their STS2 mods directory.
+Before publishing, `MultiplayerSaveSlots.json` must have a `version` matching the tag without the leading `v`.
 
-Future operator prompt contract:
+## Manual Smoke Setup
 
-```text
-When I say "merge PR #N and tag vX.Y.Z":
-1. Merge PR #N.
-2. Update local main with a fast-forward pull.
-3. Confirm main is clean and synced with origin/main.
-4. Confirm MultiplayerSaveSlots.json has version X.Y.Z.
-5. Run scripts/release-local.sh vX.Y.Z.
-6. Report the GitHub Release URL and zip asset name.
-```
-
-## Automation-Assisted In-Game Smoke Test
-
-The smoke setup flow automates packaging, local mod installation, save-state backup, and fixture application. It does not automate STS2 menu clicks or Steam multiplayer.
-
-First build the drop-in package:
+The smoke setup script can install a package and stage local save fixtures. It does not automate STS2 menu clicks or Steam multiplayer.
 
 ```bash
 scripts/release-local.sh --package-only v0.1.0
-```
-
-Install that package into the local STS2 mods folder:
-
-```bash
 scripts/smoke-setup-local.sh install --tag v0.1.0
 ```
 
-Fixtures are local artifacts created from real STS2 save files and are ignored by git. Capture a fixture from the active multiplayer save path you want to reuse:
+Capture and apply a real local active-save fixture:
 
 ```bash
 ACTIVE_SAVE="$HOME/.local/share/Steam/steamapps/common/Slay the Spire 2/preferences/profile_1/saves/current_run_mp.save"
 scripts/smoke-setup-local.sh capture-fixture --name unmanaged-active --active-save-path "$ACTIVE_SAVE"
-```
-
-Apply a fixture before launching STS2. The script backs up existing `current_run_mp.save` and `MultiplayerSaveSlots/` state before mutation:
-
-```bash
-ACTIVE_SAVE="$HOME/.local/share/Steam/steamapps/common/Slay the Spire 2/preferences/profile_1/saves/current_run_mp.save"
 scripts/smoke-setup-local.sh apply-fixture --name unmanaged-active --active-save-path "$ACTIVE_SAVE"
 ```
-
-Manual in-game checklist after setup:
-
-Solo host-picker gate:
-
-1. Launch STS2 with mods enabled.
-2. Open `Multiplayer`.
-3. Confirm `Host` is visible even when a current multiplayer save exists.
-4. Select `Host -> Standard`.
-5. Confirm the `Multiplayer Saves - Standard` picker appears.
-6. Choose `Start New Run`.
-7. Confirm hosting continues to the multiplayer lobby or character-select screen.
-8. If `RemoveMultiplayerPlayerLimit` is installed, confirm the log records the RMP hosted lobby path/capacity.
-
-STS2 does not write a multiplayer run save from a solo host lobby. Save creation requires at least one joined player and a run that actually begins.
-
-Two-player save lifecycle:
-
-1. Invite at least one other player and begin a Standard multiplayer run.
-2. Progress far enough for STS2 to write the multiplayer run save.
-3. Confirm `MultiplayerSaveSlots/index.json` gains a new campaign id.
-4. Re-open `Host -> Standard` and confirm the new campaign appears in the picker.
-5. Confirm the picker shows real roster labels and omits progress when no safe act/floor value is available.
-6. Select a campaign row and confirm the preview shows progress, player count, timestamps, short campaign id, save fingerprint, and the full roster with selected characters when available.
-7. Press `Continue` and confirm the selected save loads.
-
-Expanded roster and recovery:
-
-1. With a 4+ player campaign, confirm roster labels compact as `First, Second +N`.
-2. Select a 4+ player campaign row and confirm the preview shows the full roster without clipping.
-3. Select an older `Unknown party` campaign, then re-open the picker and confirm metadata repair updates the row if STS2 exposes roster/progress data.
-4. In an existing campaign's loaded-run lobby, change the participant set if possible, press `Embark`, and confirm the compatibility warning appears once before the next identical `Embark` attempt proceeds to vanilla validation.
-5. With an unmanaged `current_run_mp.save` fixture applied, choose a host action and confirm the recovery modal offers `Duplicate Active Save`.
-6. With a managed active save changed after activation, choose a different campaign and confirm the recovery modal offers `Sync Active Save`.
 
 Smoke reports and backups are written under `artifacts/smoke/`.
