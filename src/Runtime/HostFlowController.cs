@@ -42,6 +42,12 @@ public sealed class HostFlowController
         return new MultiplayerSavePickerModel(gameMode, rows, _bank.HasDeletedCampaigns());
     }
 
+    public MultiplayerSavePickerModel BuildArchivePickerModel(MultiplayerGameMode gameMode)
+    {
+        var rows = MultiplayerSavePickerRow.ArchivedCampaigns(_bank.ListArchivedCampaigns(gameMode));
+        return new MultiplayerSavePickerModel(gameMode, rows, _bank.HasDeletedCampaigns());
+    }
+
     public ActiveSaveRecoveryModel BuildRecoveryModel(MultiplayerGameMode gameMode) =>
         _recovery.BuildRecoveryModel(gameMode);
 
@@ -132,6 +138,45 @@ public sealed class HostFlowController
         try
         {
             _bank.ArchiveCampaign(campaignId, _clock.UtcNow);
+            return OperationResult.Ok();
+        }
+        catch (Exception ex)
+        {
+            return OperationResult.Fail(ex.Message);
+        }
+    }
+
+    public OperationResult RestoreArchivedCampaign(string archiveKey)
+    {
+        try
+        {
+            _bank.RestoreArchivedCampaign(archiveKey);
+            return OperationResult.Ok();
+        }
+        catch (Exception ex)
+        {
+            return OperationResult.Fail(ex.Message);
+        }
+    }
+
+    public OperationResult DeleteCampaign(string campaignId)
+    {
+        try
+        {
+            _bank.DeleteCampaign(campaignId);
+            return OperationResult.Ok();
+        }
+        catch (Exception ex)
+        {
+            return OperationResult.Fail(ex.Message);
+        }
+    }
+
+    public OperationResult DeleteArchivedCampaign(string archiveKey)
+    {
+        try
+        {
+            _bank.DeleteArchivedCampaign(archiveKey);
             return OperationResult.Ok();
         }
         catch (Exception ex)

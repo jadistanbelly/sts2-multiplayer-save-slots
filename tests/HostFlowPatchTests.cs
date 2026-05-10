@@ -26,8 +26,8 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal constrains character icon texture size", PickerModalConstrainsCharacterIconTextureSize);
         yield return new TestCase("picker modal wraps character indicators in fixed slot", PickerModalWrapsCharacterIndicatorsInFixedSlot);
         yield return new TestCase("picker modal exposes split panel helpers", PickerModalExposesSplitPanelHelpers);
-        yield return new TestCase("picker modal exposes delete helpers", PickerModalExposesDeleteHelpers);
-        yield return new TestCase("picker modal exposes selected save action helpers", PickerModalExposesSelectedSaveActionHelpers);
+        yield return new TestCase("picker modal exposes archive management helpers", PickerModalExposesArchiveManagementHelpers);
+        yield return new TestCase("picker modal exposes active and archived save action helpers", PickerModalExposesSaveActionHelpers);
         yield return new TestCase("picker modal exposes quick polish layout constants", PickerModalExposesQuickPolishLayoutConstants);
         yield return new TestCase("modal styling exposes action button variants", ModalStylingExposesActionButtonVariants);
         yield return new TestCase("modal styling exposes rounded card radius", ModalStylingExposesRoundedCardRadius);
@@ -320,33 +320,41 @@ public static class HostFlowPatchTests
         }
     }
 
-    private static void PickerModalExposesDeleteHelpers()
+    private static void PickerModalExposesArchiveManagementHelpers()
     {
         var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
         AssertEx.True(modalType is not null);
 
         foreach (var methodName in new[]
         {
-            "ShowDeleteConfirmation",
-            "ShowClearDeletedConfirmation",
+            "ShowArchives",
+            "ShowArchiveConfirmation",
+            "ShowActiveDeleteConfirmation",
+            "ShowArchivedDeleteConfirmation",
+            "ShowDeleteAllArchivesConfirmation",
+            "ArchiveSelectedCampaign",
             "DeleteSelectedCampaign",
+            "RestoreSelectedArchive",
+            "DeleteSelectedArchive",
             "ClearDeletedCampaigns",
             "RefreshPicker"
         })
         {
-            var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
             AssertEx.True(method is not null, $"{methodName} helper was not found");
         }
     }
 
-    private static void PickerModalExposesSelectedSaveActionHelpers()
+    private static void PickerModalExposesSaveActionHelpers()
     {
         var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
         AssertEx.True(modalType is not null);
 
         foreach (var methodName in new[]
         {
-            "CreateSelectedCampaignActions",
+            "BuildArchiveFooterActions",
+            "CreateActiveCampaignActions",
+            "CreateArchivedCampaignActions",
             "SetSelectedCampaignActionsEnabled"
         })
         {

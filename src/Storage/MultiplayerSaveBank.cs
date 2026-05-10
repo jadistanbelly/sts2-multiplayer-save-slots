@@ -64,6 +64,23 @@ public sealed class MultiplayerSaveBank
             .ToList();
     }
 
+    public IReadOnlyList<ArchivedCampaign> ListArchivedCampaigns(MultiplayerGameMode gameMode)
+    {
+        EnsureCreated();
+        StoragePathGuard.EnsureSafeDirectoryPath(_paths.DeletedDirectory, "deleted campaigns directory");
+        if (!Directory.Exists(_paths.DeletedDirectory))
+            return [];
+
+        StoragePathGuard.EnsureSafeTree(_paths.DeletedDirectory, "deleted campaigns directory");
+        return Directory.EnumerateDirectories(_paths.DeletedDirectory)
+            .Select(TryReadArchivedCampaign)
+            .Where(archived => archived is not null)
+            .Cast<ArchivedCampaign>()
+            .Where(archived => archived.Metadata.GameMode == gameMode)
+            .OrderByDescending(archived => archived.Metadata.LastPlayedAtUtc)
+            .ToList();
+    }
+
     public CampaignMetadata GetCampaign(string campaignId)
     {
         EnsureCreated();
@@ -106,6 +123,57 @@ public sealed class MultiplayerSaveBank
         var remainingIds = ReadIndex().CampaignIds.Where(id => !string.Equals(id, campaignId, StringComparison.Ordinal));
         WriteIndex(remainingIds);
         return archiveDirectory;
+    }
+
+    public CampaignMetadata RestoreArchivedCampaign(string archiveKey)
+    {
+        EnsureCreated();
+        var sourceDirectory = _paths.ArchivedCampaignDirectory(archiveKey);
+        StoragePathGuard.EnsurePathInsideDirectory(sourceDirectory, _paths.DeletedDirectory, "deleted campaign directory");
+        StoragePathGuard.EnsureSafeTree(sourceDirectory, "deleted campaign directory");
+        if (!Directory.Exists(sourceDirectory))
+            throw new DirectoryNotFoundException($"Deleted campaign directory is missing: {sourceDirectory}");
+
+        var metadata = ReadArchivedMetadata(sourceDirectory);
+        var destinationDirectory = _paths.CampaignDirectory(metadata.CampaignId);
+        StoragePathGuard.EnsurePathInsideDirectory(destinationDirectory, _paths.SavesDirectory, "campaign directory");
+        StoragePathGuard.EnsureSafeDirectoryPath(destinationDirectory, "campaign directory");
+        if (Directory.Exists(destinationDirectory) || File.Exists(destinationDirectory))
+            throw new InvalidOperationException($"Campaign {metadata.CampaignId} already exists in active saves.");
+
+        var index = ReadIndex();
+        if (index.CampaignIds.Contains(metadata.CampaignId))
+            throw new InvalidOperationException($"Campaign {metadata.CampaignId} is already indexed.");
+
+        Directory.Move(sourceDirectory, destinationDirectory);
+        WriteIndex(index.CampaignIds.Concat([metadata.CampaignId]));
+        return metadata;
+    }
+
+    public void DeleteCampaign(string campaignId)
+    {
+        EnsureCampaignIndexed(campaignId);
+        var sourceDirectory = _paths.CampaignDirectory(campaignId);
+        StoragePathGuard.EnsurePathInsideDirectory(sourceDirectory, _paths.SavesDirectory, "campaign directory");
+        StoragePathGuard.EnsureSafeTree(sourceDirectory, "campaign directory");
+        if (!Directory.Exists(sourceDirectory))
+            throw new DirectoryNotFoundException($"Campaign directory is missing: {sourceDirectory}");
+
+        Directory.Delete(sourceDirectory, recursive: true);
+        var remainingIds = ReadIndex().CampaignIds.Where(id => !string.Equals(id, campaignId, StringComparison.Ordinal));
+        WriteIndex(remainingIds);
+    }
+
+    public void DeleteArchivedCampaign(string archiveKey)
+    {
+        EnsureCreated();
+        var sourceDirectory = _paths.ArchivedCampaignDirectory(archiveKey);
+        StoragePathGuard.EnsurePathInsideDirectory(sourceDirectory, _paths.DeletedDirectory, "deleted campaign directory");
+        StoragePathGuard.EnsureSafeTree(sourceDirectory, "deleted campaign directory");
+        if (!Directory.Exists(sourceDirectory))
+            throw new DirectoryNotFoundException($"Deleted campaign directory is missing: {sourceDirectory}");
+
+        Directory.Delete(sourceDirectory, recursive: true);
     }
 
     public bool HasDeletedCampaigns()
@@ -205,5 +273,31 @@ public sealed class MultiplayerSaveBank
         {
             return null;
         }
+    }
+
+    private ArchivedCampaign? TryReadArchivedCampaign(string archiveDirectory)
+    {
+        var archiveKey = Path.GetFileName(archiveDirectory);
+        try
+        {
+            SaveBankPaths.ValidateArchiveKey(archiveKey);
+            var metadata = ReadArchivedMetadata(archiveDirectory);
+            return new ArchivedCampaign(archiveKey, metadata);
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static CampaignMetadata ReadArchivedMetadata(string archiveDirectory)
+    {
+        var metadataPath = Path.Combine(archiveDirectory, "metadata.json");
+        StoragePathGuard.EnsureSafeFilePath(metadataPath, "deleted campaign metadata");
+        var metadata = JsonFile.Read<CampaignMetadata>(metadataPath);
+        if (!SaveBankPaths.IsValidCampaignId(metadata.CampaignId))
+            throw new InvalidOperationException("Deleted campaign metadata id is invalid.");
+
+        return metadata;
     }
 }

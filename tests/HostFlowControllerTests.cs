@@ -16,7 +16,9 @@ public static class HostFlowControllerTests
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
         yield return new TestCase("STS2 save bank adapter repairs listed campaign character ids from payload", SaveBankAdapterRepairsListedCampaignCharacterIdsFromPayload);
         yield return new TestCase("controller picker model exposes deleted save availability", ControllerPickerModelExposesDeletedSaveAvailability);
+        yield return new TestCase("controller builds archive picker model with archived rows", ControllerBuildsArchivePickerModel);
         yield return new TestCase("picker model exposes default selected campaign", PickerModelExposesDefaultSelectedCampaign);
+        yield return new TestCase("picker model exposes default selected archive", PickerModelExposesDefaultSelectedArchive);
         yield return new TestCase("picker model describes empty campaign list", PickerModelDescribesEmptyCampaignList);
         yield return new TestCase("picker character badge labels are stable", PickerCharacterBadgeLabelsAreStable);
         yield return new TestCase("picker roster entries use player badge fallback", PickerRosterEntriesUsePlayerBadgeFallback);
@@ -62,6 +64,12 @@ public static class HostFlowControllerTests
         yield return new TestCase("recovery model reports unavailable when no options exist", RecoveryModelReportsUnavailableWhenNoOptionsExist);
         yield return new TestCase("controller archives selected campaign", ControllerArchivesSelectedCampaign);
         yield return new TestCase("controller reports archive campaign failure", ControllerReportsArchiveCampaignFailure);
+        yield return new TestCase("controller restores archived campaign", ControllerRestoresArchivedCampaign);
+        yield return new TestCase("controller reports restore archived campaign failure", ControllerReportsRestoreArchivedCampaignFailure);
+        yield return new TestCase("controller permanently deletes active campaign", ControllerPermanentlyDeletesActiveCampaign);
+        yield return new TestCase("controller reports permanent active delete failure", ControllerReportsPermanentActiveDeleteFailure);
+        yield return new TestCase("controller permanently deletes archived campaign", ControllerPermanentlyDeletesArchivedCampaign);
+        yield return new TestCase("controller reports permanent archived delete failure", ControllerReportsPermanentArchivedDeleteFailure);
         yield return new TestCase("controller clears deleted campaigns", ControllerClearsDeletedCampaigns);
         yield return new TestCase("controller reports clear deleted failure", ControllerReportsClearDeletedFailure);
     }
@@ -206,6 +214,38 @@ public static class HostFlowControllerTests
         AssertEx.True(model.HasDeletedCampaigns);
     }
 
+    private static void ControllerBuildsArchivePickerModel()
+    {
+        var bank = new FakeHostFlowSaveBank
+        {
+            ArchivedCampaigns =
+            [
+                new ArchivedCampaign(
+                    "20260510123456-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    new CampaignMetadata(
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                        MultiplayerGameMode.Standard,
+                        "Alice, Bob",
+                        [new PlayerIdentity("steam:1", "Alice"), new PlayerIdentity("steam:2", "Bob")],
+                        DateTimeOffset.Parse("2026-05-09T20:00:00Z"),
+                        DateTimeOffset.Parse("2026-05-09T20:30:00Z"),
+                        null,
+                        "checksum",
+                        "Floor 3"))
+            ]
+        };
+
+        var model = CreateController(bank).BuildArchivePickerModel(MultiplayerGameMode.Standard);
+
+        AssertEx.Equal(MultiplayerGameMode.Standard, model.GameMode);
+        AssertEx.Equal(1, model.Rows.Count);
+        AssertEx.Equal(PickerRowKind.ArchivedCampaign, model.Rows[0].Kind);
+        AssertEx.Equal("Alice, Bob", model.Rows[0].Title);
+        AssertEx.Equal("Floor 3 - 2 players", model.Rows[0].Subtitle);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", model.Rows[0].CampaignId);
+        AssertEx.Equal("20260510123456-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", model.Rows[0].ArchiveKey);
+    }
+
     private static void PickerModelExposesDefaultSelectedCampaign()
     {
         var model = new MultiplayerSavePickerModel(
@@ -236,6 +276,39 @@ public static class HostFlowControllerTests
         AssertEx.Equal("Alice, Bob", campaignRows[0].Title);
         AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", defaultSelected?.CampaignId);
     }
+
+    private static void PickerModelExposesDefaultSelectedArchive()
+    {
+        var model = new MultiplayerSavePickerModel(
+            MultiplayerGameMode.Standard,
+            [
+                MultiplayerSavePickerRow.ArchivedCampaign(new ArchivedCampaign(
+                    "20260510123456-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    new CampaignMetadata(
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                        MultiplayerGameMode.Standard,
+                        "Alice, Bob",
+                        [new PlayerIdentity("steam:1", "Alice"), new PlayerIdentity("steam:2", "Bob")],
+                        DateTimeOffset.Parse("2026-05-09T20:00:00Z"),
+                        DateTimeOffset.Parse("2026-05-09T20:30:00Z"),
+                        null,
+                        "checksum",
+                        "Floor 3")))
+            ]);
+
+        var archivedRowsProperty = typeof(MultiplayerSavePickerModel).GetProperty("ArchivedRows")
+            ?? throw new InvalidOperationException("ArchivedRows helper was not found");
+        var defaultSelectedProperty = typeof(MultiplayerSavePickerModel).GetProperty("DefaultSelectedArchive")
+            ?? throw new InvalidOperationException("DefaultSelectedArchive helper was not found");
+
+        var archivedRows = (IReadOnlyList<MultiplayerSavePickerRow>)archivedRowsProperty.GetValue(model)!;
+        var defaultSelected = (MultiplayerSavePickerRow?)defaultSelectedProperty.GetValue(model);
+
+        AssertEx.Equal(1, archivedRows.Count);
+        AssertEx.Equal("20260510123456-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", archivedRows[0].ArchiveKey);
+        AssertEx.Equal("20260510123456-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", defaultSelected?.ArchiveKey);
+    }
+
 
     private static void PickerModelDescribesEmptyCampaignList()
     {
@@ -1009,6 +1082,67 @@ public static class HostFlowControllerTests
         AssertEx.Equal("archive failed", result.ErrorMessage);
     }
 
+    private static void ControllerRestoresArchivedCampaign()
+    {
+        var bank = new FakeHostFlowSaveBank();
+
+        var result = CreateController(bank).RestoreArchivedCampaign("20260510123456-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal("20260510123456-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", bank.RestoredArchiveKey);
+    }
+
+    private static void ControllerReportsRestoreArchivedCampaignFailure()
+    {
+        var bank = new FakeHostFlowSaveBank { RestoreArchiveFailure = "restore failed" };
+
+        var result = CreateController(bank).RestoreArchivedCampaign("20260510123456-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("restore failed", result.ErrorMessage);
+    }
+
+    private static void ControllerPermanentlyDeletesActiveCampaign()
+    {
+        var bank = new FakeHostFlowSaveBank();
+
+        var result = CreateController(bank).DeleteCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", bank.DeletedCampaignId);
+    }
+
+    private static void ControllerReportsPermanentActiveDeleteFailure()
+    {
+        var bank = new FakeHostFlowSaveBank { DeleteCampaignFailure = "delete failed" };
+
+        var result = CreateController(bank).DeleteCampaign("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("delete failed", result.ErrorMessage);
+    }
+
+    private static void ControllerPermanentlyDeletesArchivedCampaign()
+    {
+        var bank = new FakeHostFlowSaveBank();
+
+        var result = CreateController(bank).DeleteArchivedCampaign("20260510123456-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal("20260510123456-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", bank.DeletedArchiveKey);
+    }
+
+    private static void ControllerReportsPermanentArchivedDeleteFailure()
+    {
+        var bank = new FakeHostFlowSaveBank { DeleteArchivedFailure = "delete archive failed" };
+
+        var result = CreateController(bank).DeleteArchivedCampaign("20260510123456-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("delete archive failed", result.ErrorMessage);
+    }
+
+
     private static void ControllerClearsDeletedCampaigns()
     {
         var bank = new FakeHostFlowSaveBank();
@@ -1069,15 +1203,25 @@ public static class HostFlowControllerTests
     private sealed class FakeHostFlowSaveBank : IHostFlowSaveBank
     {
         public IReadOnlyList<CampaignMetadata> Campaigns { get; init; } = [];
+        public IReadOnlyList<ArchivedCampaign> ArchivedCampaigns { get; init; } = [];
         public bool HasDeleted { get; init; }
         public string? ArchivedCampaignId { get; private set; }
         public DateTimeOffset? ArchivedAtUtc { get; private set; }
         public string? ArchiveFailure { get; init; }
+        public string? RestoredArchiveKey { get; private set; }
+        public string? RestoreArchiveFailure { get; init; }
+        public string? DeletedCampaignId { get; private set; }
+        public string? DeleteCampaignFailure { get; init; }
+        public string? DeletedArchiveKey { get; private set; }
+        public string? DeleteArchivedFailure { get; init; }
         public int ClearDeletedCount { get; private set; }
         public string? ClearDeletedFailure { get; init; }
 
         public IReadOnlyList<CampaignMetadata> ListCampaigns(MultiplayerGameMode gameMode) =>
             Campaigns.Where(campaign => campaign.GameMode == gameMode).ToList();
+
+        public IReadOnlyList<ArchivedCampaign> ListArchivedCampaigns(MultiplayerGameMode gameMode) =>
+            ArchivedCampaigns.Where(archived => archived.Metadata.GameMode == gameMode).ToList();
 
         public bool HasDeletedCampaigns() => HasDeleted;
 
@@ -1088,6 +1232,32 @@ public static class HostFlowControllerTests
 
             ArchivedCampaignId = campaignId;
             ArchivedAtUtc = deletedAtUtc;
+        }
+
+        public CampaignMetadata RestoreArchivedCampaign(string archiveKey)
+        {
+            if (RestoreArchiveFailure is not null)
+                throw new InvalidOperationException(RestoreArchiveFailure);
+
+            RestoredArchiveKey = archiveKey;
+            return ArchivedCampaigns.FirstOrDefault(archived => archived.ArchiveKey == archiveKey)?.Metadata
+                ?? CampaignWithRoster([]);
+        }
+
+        public void DeleteCampaign(string campaignId)
+        {
+            if (DeleteCampaignFailure is not null)
+                throw new InvalidOperationException(DeleteCampaignFailure);
+
+            DeletedCampaignId = campaignId;
+        }
+
+        public void DeleteArchivedCampaign(string archiveKey)
+        {
+            if (DeleteArchivedFailure is not null)
+                throw new InvalidOperationException(DeleteArchivedFailure);
+
+            DeletedArchiveKey = archiveKey;
         }
 
         public void ClearDeletedCampaigns()

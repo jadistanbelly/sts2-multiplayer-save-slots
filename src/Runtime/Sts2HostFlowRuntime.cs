@@ -33,10 +33,22 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
             .Select(TryRepairPayloadCharacterMetadata)
             .ToList();
 
+    public IReadOnlyList<ArchivedCampaign> ListArchivedCampaigns(MultiplayerGameMode gameMode) =>
+        _bank.ListArchivedCampaigns(gameMode);
+
     public bool HasDeletedCampaigns() => _bank.HasDeletedCampaigns();
 
     public void ArchiveCampaign(string campaignId, DateTimeOffset deletedAtUtc) =>
         _bank.ArchiveCampaign(campaignId, deletedAtUtc);
+
+    public CampaignMetadata RestoreArchivedCampaign(string archiveKey) =>
+        _bank.RestoreArchivedCampaign(archiveKey);
+
+    public void DeleteCampaign(string campaignId) =>
+        _bank.DeleteCampaign(campaignId);
+
+    public void DeleteArchivedCampaign(string archiveKey) =>
+        _bank.DeleteArchivedCampaign(archiveKey);
 
     public void ClearDeletedCampaigns() =>
         _bank.ClearDeletedCampaigns();
