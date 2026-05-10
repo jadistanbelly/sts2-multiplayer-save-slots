@@ -28,7 +28,9 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal exposes split panel helpers", PickerModalExposesSplitPanelHelpers);
         yield return new TestCase("picker modal exposes delete helpers", PickerModalExposesDeleteHelpers);
         yield return new TestCase("picker modal exposes selected save action helpers", PickerModalExposesSelectedSaveActionHelpers);
+        yield return new TestCase("picker modal exposes quick polish layout constants", PickerModalExposesQuickPolishLayoutConstants);
         yield return new TestCase("modal styling exposes action button variants", ModalStylingExposesActionButtonVariants);
+        yield return new TestCase("modal styling exposes rounded card radius", ModalStylingExposesRoundedCardRadius);
         yield return new TestCase("recovery modal exposes explicit UI builder", RecoveryModalExposesExplicitUiBuilder);
         yield return new TestCase("RMP host compatibility opens picker before direct host", RmpHostCompatibilityOpensPickerBeforeDirectHost);
         yield return new TestCase("RMP host compatibility resumes original host handler", RmpHostCompatibilityResumesOriginalHostHandler);
@@ -353,6 +355,28 @@ public static class HostFlowPatchTests
         }
     }
 
+    private static void PickerModalExposesQuickPolishLayoutConstants()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+
+        var campaignFrameWidth = InvokePrivateFloat(modalType!, "GetCampaignListFrameWidth");
+        var campaignRowWidth = InvokePrivateFloat(modalType!, "GetCampaignListRowWidth");
+        var previewFrameWidth = InvokePrivateFloat(modalType!, "GetPreviewFrameWidth");
+        var previewContentWidth = InvokePrivateFloat(modalType!, "GetPreviewContentWidth");
+        var actionButtonWidth = InvokePrivateFloat(modalType!, "GetActionButtonWidth");
+
+        AssertEx.True(campaignFrameWidth < previewFrameWidth, "Campaign list should be narrower than preview");
+        AssertEx.True(campaignFrameWidth >= 390f, "Campaign list should stay readable");
+        AssertEx.True(previewFrameWidth >= 520f, "Preview should have room for party and run details");
+        AssertEx.True(campaignRowWidth < campaignFrameWidth, "Campaign rows need inner frame padding");
+        AssertEx.True(previewContentWidth < previewFrameWidth, "Preview content needs inner frame padding");
+        AssertEx.True(actionButtonWidth >= 190f, "Action buttons should share a stable readable width");
+        AssertEx.True(
+            Math.Abs((campaignFrameWidth / (campaignFrameWidth + previewFrameWidth)) - 0.43f) <= 0.02f,
+            "Campaign and preview widths should approximate the approved 43/57 split");
+    }
+
     private static void ModalStylingExposesActionButtonVariants()
     {
         var stylingType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.ModalUiStyling");
@@ -367,6 +391,25 @@ public static class HostFlowPatchTests
             var method = stylingType!.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public);
             AssertEx.True(method is not null, $"{methodName} helper was not found");
         }
+    }
+
+    private static void ModalStylingExposesRoundedCardRadius()
+    {
+        var stylingType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.ModalUiStyling");
+        AssertEx.True(stylingType is not null);
+        var radius = (int)(stylingType!.GetMethod("GetCardCornerRadius", BindingFlags.Static | BindingFlags.Public)
+            ?? throw new InvalidOperationException("GetCardCornerRadius helper was not found"))
+            .Invoke(null, [])!;
+
+        AssertEx.True(radius >= 10, "Cards and buttons should be more rounded than the previous square-ish pass");
+        AssertEx.True(radius <= 14, "Cards and buttons should not become pill-shaped");
+    }
+
+    private static float InvokePrivateFloat(Type type, string methodName)
+    {
+        var method = type.GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"{methodName} helper was not found");
+        return Convert.ToSingle(method.Invoke(null, [])!);
     }
 
     private static void RecoveryModalExposesExplicitUiBuilder()

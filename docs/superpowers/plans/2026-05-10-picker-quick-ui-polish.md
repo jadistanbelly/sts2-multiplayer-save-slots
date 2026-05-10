@@ -63,7 +63,7 @@ private static float GetCampaignListFrameWidth() => 400f;
 private static float GetCampaignListRowWidth() => 370f;
 private static float GetPreviewFrameWidth() => 530f;
 private static float GetPreviewContentWidth() => 510f;
-private static float GetActionButtonWidth() => 210f;
+private static float GetActionButtonWidth() => 230f;
 ```
 
 Use those helpers for the campaign list frame, row buttons, preview frame, preview root, selected-save action buttons, footer cancel button, and footer clear-deleted button.

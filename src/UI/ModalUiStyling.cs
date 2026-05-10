@@ -32,6 +32,8 @@ internal static class ModalUiStyling
         root.ZIndex = 100;
     }
 
+    public static int GetCardCornerRadius() => 12;
+
     public static PanelContainer CreatePanel(Vector2 size, float halfWidth, float halfHeight)
     {
         var panel = new PanelContainer
@@ -139,7 +141,7 @@ internal static class ModalUiStyling
             ShadowOffset = new Vector2(0, 8)
         };
         style.SetBorderWidthAll(3);
-        style.SetCornerRadiusAll(4);
+        style.SetCornerRadiusAll(GetCardCornerRadius());
         style.SetContentMarginAll(20);
         return style;
     }
@@ -152,7 +154,7 @@ internal static class ModalUiStyling
             BorderColor = border
         };
         style.SetBorderWidthAll(borderWidth);
-        style.SetCornerRadiusAll(4);
+        style.SetCornerRadiusAll(GetCardCornerRadius());
         style.SetContentMarginAll(10);
         return style;
     }
@@ -165,7 +167,7 @@ internal static class ModalUiStyling
             BorderColor = PanelBorder
         };
         style.SetBorderWidthAll(2);
-        style.SetCornerRadiusAll(5);
+        style.SetCornerRadiusAll(GetCardCornerRadius());
         style.SetContentMarginAll(0);
         return style;
     }

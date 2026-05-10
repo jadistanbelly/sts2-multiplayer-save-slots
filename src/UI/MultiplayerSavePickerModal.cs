@@ -92,7 +92,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         actions.AddThemeConstantOverride("separation", 10);
         root.AddChild(actions);
 
-        var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(180, 44) };
+        var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44) };
         ModalUiStyling.StyleButton(cancel);
         cancel.Pressed += Close;
         actions.AddChild(cancel);
@@ -104,7 +104,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             var clearDeleted = new Button
             {
                 Text = "Clear Deleted Saves",
-                CustomMinimumSize = new Vector2(230, 46)
+                CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
             };
             ModalUiStyling.StyleDangerButton(clearDeleted);
             clearDeleted.Pressed += ShowClearDeletedConfirmation;
@@ -119,7 +119,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         var frame = CreateCampaignListFrame();
         var list = new VBoxContainer
         {
-            CustomMinimumSize = new Vector2(400, 430),
+            CustomMinimumSize = new Vector2(GetCampaignListRowWidth(), 430),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
@@ -128,7 +128,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
         var startNewRow = _model.Rows.FirstOrDefault(row => row.Kind == PickerRowKind.StartNewRun)
             ?? MultiplayerSavePickerRow.StartNew();
-        var startNew = CreateRowButton(startNewRow, new Vector2(400, 62));
+        var startNew = CreateRowButton(startNewRow, new Vector2(GetCampaignListRowWidth(), 62));
         startNew.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         list.AddChild(startNew);
         _defaultFocusedControl ??= startNew;
@@ -157,7 +157,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     {
         var frame = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(430, 450),
+            CustomMinimumSize = new Vector2(GetCampaignListFrameWidth(), 450),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             ClipContents = true
@@ -171,7 +171,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         var button = new Button
         {
             Text = string.IsNullOrWhiteSpace(row.Subtitle) ? row.Title : $"{row.Title}\n{row.Subtitle}",
-            CustomMinimumSize = new Vector2(400, 74),
+            CustomMinimumSize = new Vector2(GetCampaignListRowWidth(), 74),
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
@@ -194,7 +194,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         var frame = CreatePreviewFrame();
         _previewRoot = new VBoxContainer
         {
-            CustomMinimumSize = new Vector2(460, 430),
+            CustomMinimumSize = new Vector2(GetPreviewContentWidth(), 430),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             ClipContents = true
@@ -209,7 +209,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     {
         var frame = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(480, 450),
+            CustomMinimumSize = new Vector2(GetPreviewFrameWidth(), 450),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             ClipContents = true
@@ -217,6 +217,16 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         ModalUiStyling.StylePreviewFrame(frame);
         return frame;
     }
+
+    private static float GetCampaignListFrameWidth() => 400f;
+
+    private static float GetCampaignListRowWidth() => 370f;
+
+    private static float GetPreviewFrameWidth() => 530f;
+
+    private static float GetPreviewContentWidth() => 510f;
+
+    private static float GetActionButtonWidth() => 230f;
 
     private Button CreateRowButton(MultiplayerSavePickerRow row, Vector2 minimumSize)
     {
@@ -282,7 +292,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         _deleteButton = new Button
         {
             Text = "Delete",
-            CustomMinimumSize = new Vector2(150, 44)
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
         };
         ModalUiStyling.StyleDangerButton(_deleteButton);
         _deleteButton.Pressed += ShowDeleteConfirmation;
@@ -293,7 +303,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         _continueButton = new Button
         {
             Text = "Continue",
-            CustomMinimumSize = new Vector2(190, 44)
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
         };
         ModalUiStyling.StylePrimaryButton(_continueButton);
         _continueButton.Pressed += ContinueSelectedCampaign;
@@ -377,14 +387,14 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         actions.AddThemeConstantOverride("separation", 12);
         root.AddChild(actions);
 
-        var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(180, 44) };
+        var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44) };
         ModalUiStyling.StyleButton(cancel);
         cancel.Pressed += CloseDetails;
         actions.AddChild(cancel);
 
         actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
 
-        var confirm = new Button { Text = confirmText, CustomMinimumSize = new Vector2(230, 44) };
+        var confirm = new Button { Text = confirmText, CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44) };
         ModalUiStyling.StyleDangerButton(confirm);
         confirm.Pressed += () =>
         {
