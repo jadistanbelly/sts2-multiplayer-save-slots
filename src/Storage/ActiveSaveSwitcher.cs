@@ -15,6 +15,8 @@ public sealed class ActiveSaveSwitcher
         _statePath = statePath;
     }
 
+    public void EnsureCanUseRuntimePaths() => EnsureRuntimePathsSafe();
+
     public void Activate(string campaignId, DateTimeOffset nowUtc)
     {
         EnsureRuntimePathsSafe();
@@ -74,6 +76,8 @@ public sealed class ActiveSaveSwitcher
             throw new InvalidOperationException("Cannot restore active save without active campaign state");
 
         var state = JsonFile.Read<ActiveSaveState>(_statePath);
+        EnsureStateBackupPathSafe(state.CampaignId, state.PreviousActiveBackupPath, "previous active save backup");
+        EnsureStateBackupPathSafe(state.CampaignId, state.PreviousStateBackupPath, "previous active state backup");
         if (state.PreviousActiveBackupPath is not null && !File.Exists(state.PreviousActiveBackupPath))
             throw new FileNotFoundException("Previous active save backup is missing", state.PreviousActiveBackupPath);
 
@@ -212,6 +216,16 @@ public sealed class ActiveSaveSwitcher
         _bank.EnsureStorageSafe();
         StoragePathGuard.EnsurePathInsideDirectory(_statePath, activeSaveDirectory, "active save state path");
         StoragePathGuard.EnsureSafeFilePath(_statePath, "active save state path");
+    }
+
+    private void EnsureStateBackupPathSafe(string campaignId, string? backupPath, string description)
+    {
+        if (string.IsNullOrWhiteSpace(backupPath))
+            return;
+
+        var backupDirectory = _bank.GetBackupDirectory(campaignId);
+        StoragePathGuard.EnsurePathInsideDirectory(backupPath, backupDirectory, description);
+        StoragePathGuard.EnsureSafeFilePath(backupPath, description);
     }
 
     private static IReadOnlyList<PlayerIdentity> RefreshRoster(

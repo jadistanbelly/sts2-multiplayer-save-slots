@@ -195,6 +195,7 @@ public sealed class Sts2ActiveSaveSync : IActiveSaveSync
         try
         {
             StoragePathGuard.EnsureSafeFilePath(_activeSavePath, "active save path");
+            _switcher.EnsureCanUseRuntimePaths();
             if (!File.Exists(_activeSavePath))
                 return OperationResult<string>.Fail("Active multiplayer save is missing");
 

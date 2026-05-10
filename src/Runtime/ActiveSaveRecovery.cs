@@ -88,6 +88,11 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
                         "Back up the campaign payload and copy the active save into the selected campaign.")
                 ]);
         }
+        catch (StoragePathSafetyException ex)
+        {
+            Console.Error.WriteLine($"[MultiplayerSaveSlots] Active save path safety check failed: {ex.Message}");
+            return ActiveSaveRecoveryModel.None();
+        }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
         {
             return DuplicateModel($"Active save state cannot be verified: {ex.Message}");
@@ -105,6 +110,7 @@ public sealed class ActiveSaveRecoveryService : IActiveSaveRecovery
             }
 
             StoragePathGuard.EnsureSafeFilePath(_activeSavePath, "active save path");
+            _switcher.EnsureCanUseRuntimePaths();
             if (!File.Exists(_activeSavePath))
                 return OperationResult.Fail("Active multiplayer save is missing");
 

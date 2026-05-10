@@ -1,5 +1,12 @@
 namespace MultiplayerSaveSlots.Storage;
 
+public sealed class StoragePathSafetyException : InvalidOperationException
+{
+    public StoragePathSafetyException(string message) : base(message)
+    {
+    }
+}
+
 public static class StoragePathGuard
 {
     public static void EnsureSafeFilePath(string path, string description) =>
@@ -35,7 +42,7 @@ public static class StoragePathGuard
 
         var rootWithSeparator = EnsureTrailingDirectorySeparator(fullRoot);
         if (!fullPath.StartsWith(rootWithSeparator, comparison))
-            throw new InvalidOperationException($"{description} must stay inside {fullRoot}: {fullPath}");
+            throw new StoragePathSafetyException($"{description} must stay inside {fullRoot}: {fullPath}");
     }
 
     private static void EnsureNoReparsePointInExistingPath(string path, string description)
@@ -62,7 +69,7 @@ public static class StoragePathGuard
                 break;
 
             if ((attributes & FileAttributes.ReparsePoint) != 0)
-                throw new InvalidOperationException($"{description} must not contain symlinks or reparse points: {current}");
+                throw new StoragePathSafetyException($"{description} must not contain symlinks or reparse points: {current}");
         }
     }
 
@@ -74,7 +81,7 @@ public static class StoragePathGuard
                 continue;
 
             if ((attributes & FileAttributes.ReparsePoint) != 0)
-                throw new InvalidOperationException($"{description} must not contain symlinks or reparse points: {entry}");
+                throw new StoragePathSafetyException($"{description} must not contain symlinks or reparse points: {entry}");
 
             if ((attributes & FileAttributes.Directory) != 0)
                 RejectReparsePointsInTree(entry, description);
