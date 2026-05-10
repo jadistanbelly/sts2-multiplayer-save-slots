@@ -134,6 +134,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             actions.AddChild(archives);
         }
 
+        actions.AddChild(CreateFooterContinueButton());
         return actions;
     }
 
@@ -172,6 +173,19 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         };
         actions.AddThemeConstantOverride("separation", 10);
         return actions;
+    }
+
+    private Button CreateFooterContinueButton()
+    {
+        _continueButton = new Button
+        {
+            Text = "Continue",
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
+        };
+        ModalUiStyling.StylePrimaryButton(_continueButton);
+        _continueButton.Pressed += ContinueSelectedCampaign;
+        SetSelectedCampaignActionsEnabled();
+        return _continueButton;
     }
 
     private Control BuildCampaignList()
@@ -356,18 +370,11 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private Control CreateActiveCampaignActions()
     {
-        var actions = new VBoxContainer
+        var actions = new HBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        actions.AddThemeConstantOverride("separation", 8);
-
-        var saveActions = new HBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        saveActions.AddThemeConstantOverride("separation", 10);
-        actions.AddChild(saveActions);
+        actions.AddThemeConstantOverride("separation", 10);
 
         _archiveButton = new Button
         {
@@ -376,9 +383,9 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         };
         ModalUiStyling.StyleButton(_archiveButton);
         _archiveButton.Pressed += ShowArchiveConfirmation;
-        saveActions.AddChild(_archiveButton);
+        actions.AddChild(_archiveButton);
 
-        saveActions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
+        actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
 
         _deleteButton = new Button
         {
@@ -387,25 +394,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         };
         ModalUiStyling.StyleDangerButton(_deleteButton);
         _deleteButton.Pressed += ShowActiveDeleteConfirmation;
-        saveActions.AddChild(_deleteButton);
-
-        var continueActions = new HBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        continueActions.AddThemeConstantOverride("separation", 10);
-        actions.AddChild(continueActions);
-
-        continueActions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-
-        _continueButton = new Button
-        {
-            Text = "Continue",
-            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
-        };
-        ModalUiStyling.StylePrimaryButton(_continueButton);
-        _continueButton.Pressed += ContinueSelectedCampaign;
-        continueActions.AddChild(_continueButton);
+        actions.AddChild(_deleteButton);
 
         SetSelectedCampaignActionsEnabled();
         return actions;
@@ -672,7 +661,6 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             return;
 
         ClearChildren(_previewRoot);
-        _continueButton = null;
         _deleteButton = null;
         _archiveButton = null;
         _restoreButton = null;

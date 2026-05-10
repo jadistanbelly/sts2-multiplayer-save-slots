@@ -352,7 +352,9 @@ public static class HostFlowPatchTests
 
         foreach (var methodName in new[]
         {
+            "BuildActiveFooterActions",
             "BuildArchiveFooterActions",
+            "CreateFooterContinueButton",
             "CreateActiveCampaignActions",
             "CreateArchivedCampaignActions",
             "SetSelectedCampaignActionsEnabled"
