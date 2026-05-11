@@ -99,7 +99,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
-        body.AddThemeConstantOverride("separation", 16);
+        body.AddThemeConstantOverride("separation", GetBodyColumnSeparation());
         root.AddChild(body);
 
         body.AddChild(BuildCampaignList());
@@ -113,68 +113,91 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private HBoxContainer BuildActiveFooterActions()
     {
-        var actions = CreateFooterActions();
-
         var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44) };
         ModalUiStyling.StyleButton(cancel);
         cancel.Pressed += Close;
-        actions.AddChild(cancel);
         _defaultFocusedControl ??= cancel;
 
-        actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-
+        Button? archives = null;
         if (_model.HasDeletedCampaigns)
         {
-            var archives = new Button
+            archives = new Button
             {
                 Text = "Archives",
                 CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
             };
             ModalUiStyling.StyleButton(archives);
             archives.Pressed += () => ShowArchives(_controller, _model.GameMode);
-            actions.AddChild(archives);
         }
 
-        actions.AddChild(CreateFooterContinueButton());
-        return actions;
+        return CreateAlignedFooterActions(cancel, archives, CreateFooterContinueButton());
     }
 
     private HBoxContainer BuildArchiveFooterActions()
     {
-        var actions = CreateFooterActions();
-
         var back = new Button { Text = "Back", CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44) };
         ModalUiStyling.StyleButton(back);
         back.Pressed += RefreshPicker;
-        actions.AddChild(back);
         _defaultFocusedControl ??= back;
 
-        actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-
+        Button? deleteAll = null;
         if (_model.HasDeletedCampaigns)
         {
-            var deleteAll = new Button
+            deleteAll = new Button
             {
                 Text = "Delete All Archives",
                 CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
             };
             ModalUiStyling.StyleDangerButton(deleteAll);
             deleteAll.Pressed += ShowDeleteAllArchivesConfirmation;
-            actions.AddChild(deleteAll);
         }
 
-        return actions;
+        return CreateAlignedFooterActions(back, null, deleteAll);
     }
 
-    private static HBoxContainer CreateFooterActions()
+    private static HBoxContainer CreateAlignedFooterActions(Control leftAction, Control? rightLeftAction, Control? rightRightAction)
     {
         var actions = new HBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        actions.AddThemeConstantOverride("separation", 10);
+        actions.AddThemeConstantOverride("separation", GetBodyColumnSeparation());
+        actions.AddChild(CreateFooterLeftSlot(leftAction));
+        actions.AddChild(CreateFooterRightActions(rightLeftAction, rightRightAction));
         return actions;
     }
+
+    private static HBoxContainer CreateFooterLeftSlot(Control leftAction)
+    {
+        var slot = new HBoxContainer
+        {
+            CustomMinimumSize = new Vector2(GetFooterLeftSlotWidth(), 44),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        slot.AddChild(leftAction);
+        return slot;
+    }
+
+    private static HBoxContainer CreateFooterRightActions(Control? leftAction, Control? rightAction)
+    {
+        var actions = new HBoxContainer
+        {
+            CustomMinimumSize = new Vector2(GetFooterRightSlotWidth(), 44),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        actions.AddThemeConstantOverride("separation", 10);
+        actions.AddChild(leftAction ?? CreateActionButtonPlaceholder());
+        actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
+        actions.AddChild(rightAction ?? CreateActionButtonPlaceholder());
+        return actions;
+    }
+
+    private static Control CreateActionButtonPlaceholder() =>
+        new()
+        {
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin
+        };
 
     private Button CreateFooterContinueButton()
     {
@@ -312,6 +335,12 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     private static float GetPreviewFrameWidth() => 530f;
 
     private static float GetPreviewContentWidth() => 510f;
+
+    private static float GetFooterLeftSlotWidth() => GetCampaignListFrameWidth();
+
+    private static float GetFooterRightSlotWidth() => GetPreviewFrameWidth();
+
+    private static int GetBodyColumnSeparation() => 16;
 
     private static float GetPreviewTitleMinimumWidth() => 390f;
 

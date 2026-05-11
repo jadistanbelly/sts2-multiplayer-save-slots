@@ -28,6 +28,7 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal exposes split panel helpers", PickerModalExposesSplitPanelHelpers);
         yield return new TestCase("picker modal exposes archive management helpers", PickerModalExposesArchiveManagementHelpers);
         yield return new TestCase("picker modal exposes active and archived save action helpers", PickerModalExposesSaveActionHelpers);
+        yield return new TestCase("picker modal exposes aligned footer helpers", PickerModalExposesAlignedFooterHelpers);
         yield return new TestCase("picker modal exposes custom rename helpers", PickerModalExposesCustomRenameHelpers);
         yield return new TestCase("modal styling exposes text input styling", ModalStylingExposesTextInputStyling);
         yield return new TestCase("picker modal keeps rename title row readable", PickerModalKeepsRenameTitleRowReadable);
@@ -191,12 +192,12 @@ public static class HostFlowPatchTests
         var details = new MultiplayerSavePickerDetails(
             "buddy1, buddy2",
             "Floor 18 - 2 players",
-            ["Progress: Floor 18", "Players: 2"],
+            ["Last played: 2026-05-08 01:30 UTC", "Save id: aaaaaaaa"],
             ["1. buddy1", "2. buddy2"]);
 
         var body = buildDetailsBody.Invoke(null, [details]);
 
-        AssertEx.Equal("Progress: Floor 18\nPlayers: 2\n\nRoster\n1. buddy1\n2. buddy2", body);
+        AssertEx.Equal("Last played: 2026-05-08 01:30 UTC\nSave id: aaaaaaaa\n\nRoster\n1. buddy1\n2. buddy2", body);
     }
 
     private static void PickerModalKeepsDetailsBodyReadableWidth()
@@ -368,6 +369,35 @@ public static class HostFlowPatchTests
         }
     }
 
+    private static void PickerModalExposesAlignedFooterHelpers()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var type = modalType!;
+
+        foreach (var methodName in new[]
+        {
+            "CreateAlignedFooterActions",
+            "CreateFooterLeftSlot",
+            "CreateFooterRightActions",
+            "CreateActionButtonPlaceholder"
+        })
+        {
+            var method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+
+        var leftSlotWidth = InvokePrivateFloat(type, "GetFooterLeftSlotWidth");
+        var rightSlotWidth = InvokePrivateFloat(type, "GetFooterRightSlotWidth");
+        var campaignFrameWidth = InvokePrivateFloat(type, "GetCampaignListFrameWidth");
+        var previewFrameWidth = InvokePrivateFloat(type, "GetPreviewFrameWidth");
+        var bodySeparation = InvokePrivateFloat(type, "GetBodyColumnSeparation");
+
+        AssertEx.Equal(campaignFrameWidth, leftSlotWidth);
+        AssertEx.Equal(previewFrameWidth, rightSlotWidth);
+        AssertEx.Equal(16f, bodySeparation);
+    }
+
     private static void PickerModalExposesCustomRenameHelpers()
     {
         var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
@@ -399,11 +429,12 @@ public static class HostFlowPatchTests
     {
         var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
         AssertEx.True(modalType is not null);
-        var iconSizeMethod = modalType!.GetMethod("GetRenameIconButtonSize", BindingFlags.Static | BindingFlags.NonPublic)
+        var type = modalType!;
+        var iconSizeMethod = type.GetMethod("GetRenameIconButtonSize", BindingFlags.Static | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("GetRenameIconButtonSize helper was not found");
 
-        var titleWidth = InvokePrivateFloat(modalType, "GetPreviewTitleMinimumWidth");
-        var previewWidth = InvokePrivateFloat(modalType, "GetPreviewContentWidth");
+        var titleWidth = InvokePrivateFloat(type, "GetPreviewTitleMinimumWidth");
+        var previewWidth = InvokePrivateFloat(type, "GetPreviewContentWidth");
         var iconSize = iconSizeMethod.Invoke(null, [])!;
         var iconWidth = GetVector2Component(iconSize, "X");
 

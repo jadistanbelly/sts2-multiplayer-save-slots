@@ -152,15 +152,10 @@ public sealed record MultiplayerSavePickerRow(
 
     private static MultiplayerSavePickerDetails BuildDetails(CampaignMetadata metadata, string title, string subtitle)
     {
-        var progress = string.IsNullOrWhiteSpace(metadata.ActOrFloor) ? "Unknown" : metadata.ActOrFloor.Trim();
         var summaryLines = new[]
         {
-            $"Progress: {progress}",
-            $"Players: {metadata.Roster.Count}",
-            $"Created: {FormatTimestamp(metadata.CreatedAtUtc)}",
             $"Last played: {FormatTimestamp(metadata.LastPlayedAtUtc)}",
-            $"Campaign id: {ShortValue(metadata.CampaignId)}",
-            $"Save fingerprint: {ShortValue(metadata.PayloadChecksum ?? metadata.ActiveChecksum)}"
+            $"Save id: {ShortValue(metadata.CampaignId)}"
         };
 
         var rosterEntries = metadata.Roster.Count == 0

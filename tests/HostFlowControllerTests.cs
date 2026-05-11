@@ -452,13 +452,9 @@ public static class HostFlowControllerTests
 
         AssertEx.Equal("buddy1, buddy2 +2", details.Title);
         AssertEx.Equal("Floor 18 - 4 players", details.Subtitle);
-        AssertEx.Equal(6, details.SummaryLines.Count);
-        AssertEx.Equal("Progress: Floor 18", details.SummaryLines[0]);
-        AssertEx.Equal("Players: 4", details.SummaryLines[1]);
-        AssertEx.Equal("Created: 2026-05-08 00:00 UTC", details.SummaryLines[2]);
-        AssertEx.Equal("Last played: 2026-05-08 01:30 UTC", details.SummaryLines[3]);
-        AssertEx.Equal("Campaign id: aaaaaaaa", details.SummaryLines[4]);
-        AssertEx.Equal("Save fingerprint: checksum", details.SummaryLines[5]);
+        AssertEx.Equal(2, details.SummaryLines.Count);
+        AssertEx.Equal("Last played: 2026-05-08 01:30 UTC", details.SummaryLines[0]);
+        AssertEx.Equal("Save id: aaaaaaaa", details.SummaryLines[1]);
         AssertEx.Equal(4, details.RosterLines.Count);
         AssertEx.Equal("1. buddy1", details.RosterLines[0]);
         AssertEx.Equal("2. buddy2", details.RosterLines[1]);
@@ -542,8 +538,9 @@ public static class HostFlowControllerTests
         var details = row.Details ?? throw new InvalidOperationException("Expected campaign details");
 
         AssertEx.Equal("0 players", row.Subtitle);
-        AssertEx.Equal("Progress: Unknown", details.SummaryLines[0]);
-        AssertEx.Equal("Players: 0", details.SummaryLines[1]);
+        AssertEx.Equal(2, details.SummaryLines.Count);
+        AssertEx.Equal("Last played: 2026-05-08 00:00 UTC", details.SummaryLines[0]);
+        AssertEx.Equal("Save id: bbbbbbbb", details.SummaryLines[1]);
         AssertEx.Equal(1, details.RosterLines.Count);
         AssertEx.Equal("Unknown party", details.RosterLines[0]);
     }
