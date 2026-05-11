@@ -147,15 +147,28 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         };
         column.AddThemeConstantOverride("separation", GetColumnFooterSeparation());
         column.AddChild(BuildPreviewPanel());
-        column.AddChild(_archivesView
+        column.AddChild(BuildRightActionStack());
+        return column;
+    }
+
+    private VBoxContainer BuildRightActionStack()
+    {
+        var actions = new VBoxContainer
+        {
+            CustomMinimumSize = new Vector2(GetPreviewFrameWidth(), GetRightActionStackHeight()),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        actions.AddThemeConstantOverride("separation", GetColumnFooterSeparation());
+        actions.AddChild(_archivesView ? CreateArchivedCampaignActions() : CreateActiveCampaignActions());
+        actions.AddChild(_archivesView
             ? CreateFooterRightActions(null, CreateDeleteAllArchivesButton())
             : CreateFooterRightActions(CreateArchivesButton(), CreateFooterContinueButton()));
-        return column;
+        return actions;
     }
 
     private Button CreateCancelButton()
     {
-        var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44) };
+        var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(GetActionButtonWidth(), GetActionButtonHeight()) };
         ModalUiStyling.StyleButton(cancel);
         cancel.Pressed += Close;
         _defaultFocusedControl ??= cancel;
@@ -164,7 +177,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private Button CreateBackButton()
     {
-        var back = new Button { Text = "Back", CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44) };
+        var back = new Button { Text = "Back", CustomMinimumSize = new Vector2(GetActionButtonWidth(), GetActionButtonHeight()) };
         ModalUiStyling.StyleButton(back);
         back.Pressed += RefreshPicker;
         _defaultFocusedControl ??= back;
@@ -179,7 +192,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         var archives = new Button
         {
             Text = "Archives",
-            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), GetActionButtonHeight())
         };
         ModalUiStyling.StyleButton(archives);
         archives.Pressed += () => ShowArchives(_controller, _model.GameMode);
@@ -194,7 +207,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         var deleteAll = new Button
         {
             Text = "Delete All Archives",
-            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), GetActionButtonHeight())
         };
         ModalUiStyling.StyleDangerButton(deleteAll);
         deleteAll.Pressed += ShowDeleteAllArchivesConfirmation;
@@ -217,7 +230,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     {
         var slot = new HBoxContainer
         {
-            CustomMinimumSize = new Vector2(GetFooterLeftSlotWidth(), 44),
+            CustomMinimumSize = new Vector2(GetFooterLeftSlotWidth(), GetActionButtonHeight()),
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
         slot.AddChild(leftAction);
@@ -228,7 +241,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     {
         var slot = new HBoxContainer
         {
-            CustomMinimumSize = new Vector2(GetFooterRightSlotWidth(), 44),
+            CustomMinimumSize = new Vector2(GetFooterRightSlotWidth(), GetActionButtonHeight()),
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
         var padding = GetFooterRightContentPadding();
@@ -243,7 +256,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         var actions = CreatePreviewActionRow(
             leftAction ?? CreateActionButtonPlaceholder(),
             rightAction ?? CreateActionButtonPlaceholder());
-        actions.CustomMinimumSize = new Vector2(GetFooterRightContentWidth(), 44);
+        actions.CustomMinimumSize = new Vector2(GetFooterRightContentWidth(), GetActionButtonHeight());
         return actions;
     }
 
@@ -270,7 +283,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     private static Control CreateActionButtonPlaceholder() =>
         new()
         {
-            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44),
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), GetActionButtonHeight()),
             SizeFlagsHorizontal = SizeFlags.ShrinkBegin
         };
 
@@ -279,7 +292,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         _continueButton = new Button
         {
             Text = "Continue",
-            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), GetActionButtonHeight())
         };
         ModalUiStyling.StylePrimaryButton(_continueButton);
         _continueButton.Pressed += ContinueSelectedCampaign;
@@ -292,7 +305,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         var frame = CreateCampaignListFrame();
         var list = new VBoxContainer
         {
-            CustomMinimumSize = new Vector2(GetCampaignListRowWidth(), 430),
+            CustomMinimumSize = new Vector2(GetCampaignListRowWidth(), GetCampaignListContentHeight()),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
@@ -334,7 +347,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     {
         var frame = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(GetCampaignListFrameWidth(), GetPreviewFrameHeight()),
+            CustomMinimumSize = new Vector2(GetCampaignListFrameWidth(), GetCampaignListFrameHeight()),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             ClipContents = true
@@ -379,7 +392,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         var frame = CreatePreviewFrame();
         _previewRoot = new VBoxContainer
         {
-            CustomMinimumSize = new Vector2(GetPreviewContentWidth(), 430),
+            CustomMinimumSize = new Vector2(GetPreviewContentWidth(), GetPreviewContentHeight()),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             ClipContents = true
@@ -394,7 +407,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     {
         var frame = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(GetPreviewFrameWidth(), GetPreviewFrameHeight()),
+            CustomMinimumSize = new Vector2(GetPreviewFrameWidth(), GetPreviewDetailsFrameHeight()),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             ClipContents = true
@@ -411,9 +424,17 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private static float GetPreviewContentWidth() => 510f;
 
-    private static float GetPickerColumnHeight() => GetPreviewFrameHeight() + GetColumnFooterSeparation() + 44f;
+    private static float GetPickerColumnHeight() => GetCampaignListFrameHeight() + GetColumnFooterSeparation() + GetActionButtonHeight();
 
-    private static float GetPreviewFrameHeight() => 450f;
+    private static float GetCampaignListFrameHeight() => 450f;
+
+    private static float GetCampaignListContentHeight() => 430f;
+
+    private static float GetPreviewDetailsFrameHeight() => GetCampaignListFrameHeight() - GetColumnFooterSeparation() - GetActionButtonHeight();
+
+    private static float GetPreviewContentHeight() => GetPreviewDetailsFrameHeight() - 20f;
+
+    private static float GetRightActionStackHeight() => GetActionButtonHeight() * 2f + GetColumnFooterSeparation();
 
     private static float GetFooterLeftSlotWidth() => GetCampaignListFrameWidth();
 
@@ -436,6 +457,8 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     private static Vector2 GetRenameIconButtonSize() => new(40, 34);
 
     private static float GetActionButtonWidth() => 230f;
+
+    private static float GetActionButtonHeight() => 44f;
 
     private Button CreateRowButton(MultiplayerSavePickerRow row, Vector2 minimumSize)
     {
@@ -493,66 +516,46 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private Control CreateActiveCampaignActions()
     {
-        var actions = new HBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        actions.AddThemeConstantOverride("separation", 10);
-
         _archiveButton = new Button
         {
             Text = "Archive",
-            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), GetActionButtonHeight())
         };
         ModalUiStyling.StyleButton(_archiveButton);
         _archiveButton.Pressed += ShowArchiveConfirmation;
-        actions.AddChild(_archiveButton);
-
-        actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
 
         _deleteButton = new Button
         {
             Text = "Delete",
-            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), GetActionButtonHeight())
         };
         ModalUiStyling.StyleDangerButton(_deleteButton);
         _deleteButton.Pressed += ShowActiveDeleteConfirmation;
-        actions.AddChild(_deleteButton);
 
         SetSelectedCampaignActionsEnabled();
-        return actions;
+        return CreateFooterRightActions(_archiveButton, _deleteButton);
     }
 
     private Control CreateArchivedCampaignActions()
     {
-        var actions = new HBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        actions.AddThemeConstantOverride("separation", 10);
-
         _restoreButton = new Button
         {
             Text = "Restore",
-            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), GetActionButtonHeight())
         };
         ModalUiStyling.StylePrimaryButton(_restoreButton);
         _restoreButton.Pressed += RestoreSelectedArchive;
-        actions.AddChild(_restoreButton);
-
-        actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
 
         _deleteButton = new Button
         {
             Text = "Delete",
-            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), GetActionButtonHeight())
         };
         ModalUiStyling.StyleDangerButton(_deleteButton);
         _deleteButton.Pressed += ShowArchivedDeleteConfirmation;
-        actions.AddChild(_deleteButton);
 
         SetSelectedCampaignActionsEnabled();
-        return actions;
+        return CreateFooterRightActions(_restoreButton, _deleteButton);
     }
 
     private void SetSelectedCampaignActionsEnabled()
@@ -867,9 +870,6 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
             return;
 
         ClearChildren(_previewRoot);
-        _deleteButton = null;
-        _archiveButton = null;
-        _restoreButton = null;
         _renameButton = null;
 
         if (row?.Details is null)
@@ -912,11 +912,6 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         content.AddChild(CreatePreviewSectionTitle("Run Details"));
         foreach (var line in details.SummaryLines)
             content.AddChild(CreatePreviewLabel(line, 16, HorizontalAlignment.Left));
-
-        if (row.Kind == PickerRowKind.ArchivedCampaign)
-            _previewRoot.AddChild(CreateArchivedCampaignActions());
-        else
-            _previewRoot.AddChild(CreateActiveCampaignActions());
     }
 
     private static VBoxContainer CreatePreviewContent()

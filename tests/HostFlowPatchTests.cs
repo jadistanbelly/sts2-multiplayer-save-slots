@@ -30,6 +30,7 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal exposes active and archived save action helpers", PickerModalExposesSaveActionHelpers);
         yield return new TestCase("picker modal exposes aligned footer helpers", PickerModalExposesAlignedFooterHelpers);
         yield return new TestCase("picker modal keeps preview and footer action columns aligned", PickerModalKeepsPreviewAndFooterActionColumnsAligned);
+        yield return new TestCase("picker modal aligns right action stack with left footer", PickerModalAlignsRightActionStackWithLeftFooter);
         yield return new TestCase("picker modal exposes custom rename helpers", PickerModalExposesCustomRenameHelpers);
         yield return new TestCase("modal styling exposes text input styling", ModalStylingExposesTextInputStyling);
         yield return new TestCase("picker modal keeps rename title row readable", PickerModalKeepsRenameTitleRowReadable);
@@ -434,6 +435,34 @@ public static class HostFlowPatchTests
         AssertEx.Equal(previewContentWidth - actionButtonWidth, rightColumnX);
     }
 
+    private static void PickerModalAlignsRightActionStackWithLeftFooter()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var type = modalType!;
+
+        foreach (var methodName in new[]
+        {
+            "BuildRightActionStack",
+            "GetCampaignListFrameHeight",
+            "GetPreviewDetailsFrameHeight",
+            "GetActionButtonHeight"
+        })
+        {
+            var method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+
+        var campaignFrameHeight = InvokePrivateFloat(type, "GetCampaignListFrameHeight");
+        var previewDetailsHeight = InvokePrivateFloat(type, "GetPreviewDetailsFrameHeight");
+        var columnFooterSeparation = InvokePrivateInt(type, "GetColumnFooterSeparation");
+        var actionButtonHeight = InvokePrivateFloat(type, "GetActionButtonHeight");
+        var pickerColumnHeight = InvokePrivateFloat(type, "GetPickerColumnHeight");
+
+        AssertEx.Equal(campaignFrameHeight, previewDetailsHeight + columnFooterSeparation + actionButtonHeight);
+        AssertEx.Equal(campaignFrameHeight + columnFooterSeparation + actionButtonHeight, pickerColumnHeight);
+    }
+
     private static void PickerModalExposesCustomRenameHelpers()
     {
         var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
@@ -536,6 +565,13 @@ public static class HostFlowPatchTests
         var method = type.GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException($"{methodName} helper was not found");
         return Convert.ToSingle(method.Invoke(null, [])!);
+    }
+
+    private static int InvokePrivateInt(Type type, string methodName)
+    {
+        var method = type.GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"{methodName} helper was not found");
+        return Convert.ToInt32(method.Invoke(null, [])!);
     }
 
     private static void RecoveryModalExposesExplicitUiBuilder()
