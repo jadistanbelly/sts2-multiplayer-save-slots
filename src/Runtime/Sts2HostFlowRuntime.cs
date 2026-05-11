@@ -30,7 +30,7 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
 
     public IReadOnlyList<CampaignMetadata> ListCampaigns(MultiplayerGameMode gameMode) =>
         _bank.ListCampaigns(gameMode)
-            .Select(TryRepairPayloadCharacterMetadata)
+            .Select(TryRepairPayloadMetadata)
             .ToList();
 
     public IReadOnlyList<ArchivedCampaign> ListArchivedCampaigns(MultiplayerGameMode gameMode) =>
@@ -56,22 +56,28 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
     public void ClearDeletedCampaigns() =>
         _bank.ClearDeletedCampaigns();
 
-    private CampaignMetadata TryRepairPayloadCharacterMetadata(CampaignMetadata metadata)
+    private CampaignMetadata TryRepairPayloadMetadata(CampaignMetadata metadata)
     {
-        if (!metadata.Roster.Any(player => string.IsNullOrWhiteSpace(player.SelectedCharacterId)))
-            return metadata;
-
         try
         {
-            var payloadRoster = ReadPayloadRoster(metadata);
-            var repairedRoster = CampaignRosterMerger.MergeByStableId(metadata.Roster, payloadRoster, out var rosterChanged);
-            if (!rosterChanged)
+            var payloadMetadata = ReadPayloadMetadata(metadata);
+            var repairedRoster = metadata.Roster;
+            var rosterChanged = false;
+            if (metadata.Roster.Any(player => string.IsNullOrWhiteSpace(player.SelectedCharacterId)))
+                repairedRoster = CampaignRosterMerger.MergeByStableId(metadata.Roster, payloadMetadata.Roster, out rosterChanged);
+
+            var repairedProgress = string.IsNullOrWhiteSpace(payloadMetadata.ActOrFloor)
+                ? metadata.ActOrFloor
+                : payloadMetadata.ActOrFloor.Trim();
+            var progressChanged = repairedProgress != metadata.ActOrFloor;
+            if (!rosterChanged && !progressChanged)
                 return metadata;
 
             var repaired = metadata with
             {
                 Label = CampaignLabeler.Build(repairedRoster),
-                Roster = repairedRoster
+                Roster = repairedRoster,
+                ActOrFloor = repairedProgress
             };
             _bank.UpdateMetadata(repaired);
             return repaired;
@@ -83,20 +89,21 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
         }
     }
 
-    private IReadOnlyList<PlayerIdentity> ReadPayloadRoster(CampaignMetadata metadata)
+    private PayloadMetadata ReadPayloadMetadata(CampaignMetadata metadata)
     {
         var payloadPath = _bank.GetPayloadPath(metadata.CampaignId);
         if (!File.Exists(payloadPath))
-            return [];
+            return new PayloadMetadata([], null);
 
         using var document = JsonDocument.Parse(File.ReadAllText(payloadPath));
         var root = document.RootElement;
+        var actOrFloor = ReadPayloadProgress(root);
         if (!root.TryGetProperty("players", out var players) || players.ValueKind != JsonValueKind.Array)
-            return [];
+            return new PayloadMetadata([], actOrFloor);
 
         var platformPrefix = PlatformPrefix(root, metadata.Roster);
         if (platformPrefix is null)
-            return [];
+            return new PayloadMetadata([], actOrFloor);
 
         var roster = new List<PlayerIdentity>();
         foreach (var player in players.EnumerateArray())
@@ -110,7 +117,23 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
             roster.Add(new PlayerIdentity($"{platformPrefix}:{netId}", string.Empty, characterId));
         }
 
-        return roster;
+        return new PayloadMetadata(roster, actOrFloor);
+    }
+
+    private static string? ReadPayloadProgress(JsonElement root)
+    {
+        var currentActIndex = TryReadInt(root, "current_act_index", out var snakeAct)
+            ? snakeAct
+            : TryReadInt(root, "CurrentActIndex", out var pascalAct)
+                ? pascalAct
+                : -1;
+        var completedFloorCount = TryReadMapPointHistoryCount(root, "map_point_history", out var snakeFloors)
+            ? snakeFloors
+            : TryReadMapPointHistoryCount(root, "MapPointHistory", out var pascalFloors)
+                ? pascalFloors
+                : 0;
+
+        return RunProgressLabeler.Build(currentActIndex, completedFloorCount);
     }
 
     private static string? PlatformPrefix(JsonElement root, IReadOnlyList<PlayerIdentity> existingRoster)
@@ -175,6 +198,31 @@ public sealed class Sts2SaveBankAdapter : IHostFlowSaveBank
         value = text.Trim();
         return true;
     }
+
+    private static bool TryReadInt(JsonElement element, string propertyName, out int value)
+    {
+        value = 0;
+        return element.TryGetProperty(propertyName, out var property) &&
+            property.ValueKind == JsonValueKind.Number &&
+            property.TryGetInt32(out value);
+    }
+
+    private static bool TryReadMapPointHistoryCount(JsonElement element, string propertyName, out int count)
+    {
+        count = 0;
+        if (!element.TryGetProperty(propertyName, out var history) || history.ValueKind != JsonValueKind.Array)
+            return false;
+
+        foreach (var act in history.EnumerateArray())
+        {
+            if (act.ValueKind == JsonValueKind.Array)
+                count += act.GetArrayLength();
+        }
+
+        return true;
+    }
+
+    private sealed record PayloadMetadata(IReadOnlyList<PlayerIdentity> Roster, string? ActOrFloor);
 }
 
 public sealed class Sts2ActiveSaveSync : IActiveSaveSync

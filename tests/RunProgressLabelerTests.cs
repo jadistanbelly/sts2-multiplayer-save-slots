@@ -6,14 +6,20 @@ public static class RunProgressLabelerTests
 {
     public static void Register(List<TestCase> tests)
     {
-        tests.Add(new TestCase("progress label uses floor when history exists", UsesFloorWhenHistoryExists));
+        tests.Add(new TestCase("progress label uses act and floor when both exist", UsesActAndFloorWhenBothExist));
+        tests.Add(new TestCase("progress label uses floor when only history exists", UsesFloorWhenOnlyHistoryExists));
         tests.Add(new TestCase("progress label uses act when only act is known", UsesActWhenOnlyActIsKnown));
         tests.Add(new TestCase("progress label omits invalid progress", OmitsInvalidProgress));
     }
 
-    private static void UsesFloorWhenHistoryExists()
+    private static void UsesActAndFloorWhenBothExist()
     {
-        AssertEx.Equal("Floor 18", RunProgressLabeler.Build(currentActIndex: 1, completedFloorCount: 17));
+        AssertEx.Equal("Act 2 - Floor 18", RunProgressLabeler.Build(currentActIndex: 1, completedFloorCount: 17));
+    }
+
+    private static void UsesFloorWhenOnlyHistoryExists()
+    {
+        AssertEx.Equal("Floor 18", RunProgressLabeler.Build(currentActIndex: -1, completedFloorCount: 17));
     }
 
     private static void UsesActWhenOnlyActIsKnown()

@@ -168,11 +168,7 @@ public sealed record MultiplayerSavePickerRow(
                     true))
                 .ToArray();
         var rosterLines = rosterEntries.Select(entry => entry.Text).ToArray();
-        var autoLabel = string.Equals(title, metadata.Label, StringComparison.Ordinal)
-            ? null
-            : metadata.Label;
-
-        return new MultiplayerSavePickerDetails(title, subtitle, summaryLines, rosterLines, autoLabel)
+        return new MultiplayerSavePickerDetails(title, subtitle, summaryLines, rosterLines)
         {
             RosterEntries = rosterEntries
         };

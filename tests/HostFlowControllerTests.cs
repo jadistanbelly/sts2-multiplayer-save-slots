@@ -15,6 +15,7 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
         yield return new TestCase("STS2 save bank adapter repairs listed campaign character ids from payload", SaveBankAdapterRepairsListedCampaignCharacterIdsFromPayload);
+        yield return new TestCase("STS2 save bank adapter repairs listed campaign progress from payload", SaveBankAdapterRepairsListedCampaignProgressFromPayload);
         yield return new TestCase("controller picker model exposes deleted save availability", ControllerPickerModelExposesDeletedSaveAvailability);
         yield return new TestCase("controller builds archive picker model with archived rows", ControllerBuildsArchivePickerModel);
         yield return new TestCase("picker model exposes default selected campaign", PickerModelExposesDefaultSelectedCampaign);
@@ -207,6 +208,36 @@ public static class HostFlowControllerTests
         AssertEx.Equal("CHARACTER.SILENT", campaigns[0].Roster[0].SelectedCharacterId);
         AssertEx.Equal("CHARACTER.IRONCLAD", campaigns[0].Roster[1].SelectedCharacterId);
         AssertEx.Equal("CHARACTER.SILENT", bank.GetCampaign(metadata.CampaignId).Roster[0].SelectedCharacterId);
+    }
+
+    private static void SaveBankAdapterRepairsListedCampaignProgressFromPayload()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        File.WriteAllText(
+            source,
+            """
+            {
+              "platform_type": "steam",
+              "current_act_index": 0,
+              "map_point_history": [["node-1"]],
+              "players": []
+            }
+            """);
+        var bank = new Storage.MultiplayerSaveBank(new Storage.SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            source,
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            "Floor 2"));
+        var adapter = new Sts2SaveBankAdapter(bank);
+
+        var campaigns = adapter.ListCampaigns(MultiplayerGameMode.Standard);
+
+        AssertEx.Equal(1, campaigns.Count);
+        AssertEx.Equal("Act 1 - Floor 2", campaigns[0].ActOrFloor);
+        AssertEx.Equal("Act 1 - Floor 2", bank.GetCampaign(metadata.CampaignId).ActOrFloor);
     }
 
     private static void ControllerPickerModelExposesDeletedSaveAvailability()
@@ -479,7 +510,7 @@ public static class HostFlowControllerTests
         AssertEx.Equal("Friday Poison Run", row.Title);
         AssertEx.Equal("Floor 5 - 2 players", row.Subtitle);
         AssertEx.Equal("Friday Poison Run", row.Details!.Title);
-        AssertEx.Equal("phatstatss, Magical Crocs", row.Details.AutoLabel);
+        AssertEx.Equal(null, row.Details.AutoLabel);
     }
 
     private static void PickerCampaignRowFallsBackWhenCustomRunNameCleared()
