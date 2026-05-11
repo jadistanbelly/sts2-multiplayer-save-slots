@@ -313,6 +313,10 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private static float GetPreviewContentWidth() => 510f;
 
+    private static float GetPreviewTitleMinimumWidth() => 390f;
+
+    private static Vector2 GetRenameIconButtonSize() => new(40, 34);
+
     private static float GetActionButtonWidth() => 230f;
 
     private Button CreateRowButton(MultiplayerSavePickerRow row, Vector2 minimumSize)
@@ -809,6 +813,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private Control CreatePreviewTitleRow(MultiplayerSavePickerRow row, MultiplayerSavePickerDetails details)
     {
+        var canRename = row.Kind == PickerRowKind.Campaign;
         var titleRow = new HBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
@@ -816,11 +821,15 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         };
         titleRow.AddThemeConstantOverride("separation", 8);
 
+        if (canRename)
+            titleRow.AddChild(CreateRenameIconSpacer());
+
         var title = CreatePreviewLabel(details.Title, 27, HorizontalAlignment.Center);
-        title.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        title.CustomMinimumSize = new Vector2(GetPreviewTitleMinimumWidth(), 0);
+        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         titleRow.AddChild(title);
 
-        if (row.Kind == PickerRowKind.Campaign)
+        if (canRename)
         {
             _renameButton = CreateRenameIconButton();
             titleRow.AddChild(_renameButton);
@@ -829,13 +838,21 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         return titleRow;
     }
 
+    private static Control CreateRenameIconSpacer() =>
+        new()
+        {
+            CustomMinimumSize = GetRenameIconButtonSize(),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
+        };
+
     private Button CreateRenameIconButton()
     {
         var button = new Button
         {
             Text = "✎",
             TooltipText = "Rename",
-            CustomMinimumSize = new Vector2(40, 34),
+            CustomMinimumSize = GetRenameIconButtonSize(),
             SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
             SizeFlagsVertical = SizeFlags.ShrinkCenter
         };

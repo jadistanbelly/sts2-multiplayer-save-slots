@@ -30,6 +30,7 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal exposes active and archived save action helpers", PickerModalExposesSaveActionHelpers);
         yield return new TestCase("picker modal exposes custom rename helpers", PickerModalExposesCustomRenameHelpers);
         yield return new TestCase("modal styling exposes text input styling", ModalStylingExposesTextInputStyling);
+        yield return new TestCase("picker modal keeps rename title row readable", PickerModalKeepsRenameTitleRowReadable);
         yield return new TestCase("picker modal exposes quick polish layout constants", PickerModalExposesQuickPolishLayoutConstants);
         yield return new TestCase("modal styling exposes action button variants", ModalStylingExposesActionButtonVariants);
         yield return new TestCase("modal styling exposes rounded card radius", ModalStylingExposesRoundedCardRadius);
@@ -392,6 +393,25 @@ public static class HostFlowPatchTests
 
         var method = stylingType!.GetMethod("StyleTextInput", BindingFlags.Static | BindingFlags.Public);
         AssertEx.True(method is not null, "StyleTextInput helper was not found");
+    }
+
+    private static void PickerModalKeepsRenameTitleRowReadable()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var iconSizeMethod = modalType!.GetMethod("GetRenameIconButtonSize", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("GetRenameIconButtonSize helper was not found");
+
+        var titleWidth = InvokePrivateFloat(modalType, "GetPreviewTitleMinimumWidth");
+        var previewWidth = InvokePrivateFloat(modalType, "GetPreviewContentWidth");
+        var iconSize = iconSizeMethod.Invoke(null, [])!;
+        var iconWidth = GetVector2Component(iconSize, "X");
+
+        AssertEx.True(titleWidth >= 360f, "Preview title needs stable width so names do not wrap one character per line");
+        AssertEx.True(iconWidth <= 44f, "Rename icon should stay compact beside the title");
+        AssertEx.True(
+            titleWidth + (iconWidth * 2f) + 16f <= previewWidth,
+            "Title row should reserve room for the edit icon without overflowing the preview panel");
     }
 
     private static void PickerModalExposesQuickPolishLayoutConstants()
