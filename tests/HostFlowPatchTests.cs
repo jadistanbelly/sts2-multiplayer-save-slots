@@ -380,6 +380,7 @@ public static class HostFlowPatchTests
             "CreateAlignedFooterActions",
             "CreateFooterLeftSlot",
             "CreateFooterRightActions",
+            "CreateFooterRightContent",
             "CreateActionButtonPlaceholder"
         })
         {
@@ -389,12 +390,17 @@ public static class HostFlowPatchTests
 
         var leftSlotWidth = InvokePrivateFloat(type, "GetFooterLeftSlotWidth");
         var rightSlotWidth = InvokePrivateFloat(type, "GetFooterRightSlotWidth");
+        var rightContentWidth = InvokePrivateFloat(type, "GetFooterRightContentWidth");
+        var rightContentPadding = InvokePrivateFloat(type, "GetFooterRightContentPadding");
         var campaignFrameWidth = InvokePrivateFloat(type, "GetCampaignListFrameWidth");
         var previewFrameWidth = InvokePrivateFloat(type, "GetPreviewFrameWidth");
+        var previewContentWidth = InvokePrivateFloat(type, "GetPreviewContentWidth");
         var bodySeparation = InvokePrivateFloat(type, "GetBodyColumnSeparation");
 
         AssertEx.Equal(campaignFrameWidth, leftSlotWidth);
         AssertEx.Equal(previewFrameWidth, rightSlotWidth);
+        AssertEx.Equal(previewContentWidth, rightContentWidth);
+        AssertEx.Equal((previewFrameWidth - previewContentWidth) / 2f, rightContentPadding);
         AssertEx.Equal(16f, bodySeparation);
     }
 

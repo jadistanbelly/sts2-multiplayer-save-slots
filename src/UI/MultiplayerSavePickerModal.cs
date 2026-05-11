@@ -180,9 +180,23 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private static HBoxContainer CreateFooterRightActions(Control? leftAction, Control? rightAction)
     {
-        var actions = new HBoxContainer
+        var slot = new HBoxContainer
         {
             CustomMinimumSize = new Vector2(GetFooterRightSlotWidth(), 44),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        var padding = GetFooterRightContentPadding();
+        slot.AddChild(CreateHorizontalSpacer(padding));
+        slot.AddChild(CreateFooterRightContent(leftAction, rightAction));
+        slot.AddChild(CreateHorizontalSpacer(padding));
+        return slot;
+    }
+
+    private static HBoxContainer CreateFooterRightContent(Control? leftAction, Control? rightAction)
+    {
+        var actions = new HBoxContainer
+        {
+            CustomMinimumSize = new Vector2(GetFooterRightContentWidth(), 44),
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
         actions.AddThemeConstantOverride("separation", 10);
@@ -191,6 +205,13 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         actions.AddChild(rightAction ?? CreateActionButtonPlaceholder());
         return actions;
     }
+
+    private static Control CreateHorizontalSpacer(float width) =>
+        new()
+        {
+            CustomMinimumSize = new Vector2(width, 0),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin
+        };
 
     private static Control CreateActionButtonPlaceholder() =>
         new()
@@ -339,6 +360,10 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     private static float GetFooterLeftSlotWidth() => GetCampaignListFrameWidth();
 
     private static float GetFooterRightSlotWidth() => GetPreviewFrameWidth();
+
+    private static float GetFooterRightContentWidth() => GetPreviewContentWidth();
+
+    private static float GetFooterRightContentPadding() => (GetFooterRightSlotWidth() - GetFooterRightContentWidth()) / 2f;
 
     private static int GetBodyColumnSeparation() => 16;
 
