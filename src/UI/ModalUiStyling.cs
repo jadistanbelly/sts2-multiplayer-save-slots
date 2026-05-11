@@ -84,6 +84,16 @@ internal static class ModalUiStyling
         ApplyButtonStyle(button, DangerBackground, DangerHoverBackground, DangerPressedBackground, new Color(0.22f, 0.06f, 0.04f, 1f));
     }
 
+    public static void StyleTextInput(LineEdit input)
+    {
+        input.AddThemeStyleboxOverride("normal", CreateButtonStyle(new Color(0.20f, 0.12f, 0.08f, 1f), PanelBorder, 2));
+        input.AddThemeStyleboxOverride("focus", CreateButtonStyle(new Color(0.24f, 0.15f, 0.09f, 1f), FocusBorder, 3));
+        input.AddThemeColorOverride("font_color", BodyText);
+        input.AddThemeColorOverride("font_placeholder_color", new Color(0.98f, 0.94f, 0.84f, 0.55f));
+        input.AddThemeFontSizeOverride("font_size", 22);
+        input.CustomMinimumSize = new Vector2(480, 46);
+    }
+
     private static void ApplyButtonStyle(Button button, Color background, Color hoverBackground, Color pressedBackground, Color border)
     {
         button.AddThemeStyleboxOverride("normal", CreateButtonStyle(background, border, 2));

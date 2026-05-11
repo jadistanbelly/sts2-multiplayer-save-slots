@@ -159,6 +159,19 @@ public sealed class HostFlowController
         }
     }
 
+    public OperationResult RenameCampaign(string campaignId, string? customName)
+    {
+        try
+        {
+            _bank.RenameCampaign(campaignId, customName);
+            return OperationResult.Ok();
+        }
+        catch (Exception ex)
+        {
+            return OperationResult.Fail(ex.Message);
+        }
+    }
+
     public OperationResult DeleteCampaign(string campaignId)
     {
         try

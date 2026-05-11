@@ -4,13 +4,14 @@ Host-side Slay the Spire 2 mod for keeping separate multiplayer campaign saves. 
 
 ## Current Release
 
-Latest release: [v0.1.0](https://github.com/jadistanbelly/sts2-multiplayer-save-slots/releases/tag/v0.1.0)
+Latest release: [v0.1.1](https://github.com/jadistanbelly/sts2-multiplayer-save-slots/releases/tag/v0.1.1)
 
-Download `MultiplayerSaveSlots-v0.1.0.zip`, then extract the included `MultiplayerSaveSlots/` folder into your STS2 `mods/` directory.
+Download `MultiplayerSaveSlots-v0.1.1.zip`, then extract the included `MultiplayerSaveSlots/` folder into your STS2 `mods/` directory.
 
 ## What It Does
 
 - Adds a save picker after `Multiplayer -> Host -> Standard/Daily/Custom`.
+- Lets the host rename save slots so themed or similar-looking runs are easier to distinguish.
 - Starts a new managed multiplayer campaign or continues an existing one.
 - Swaps the selected campaign payload into STS2's active multiplayer save before loading.
 - Syncs the active save back to the selected campaign after STS2 writes progress.
@@ -35,7 +36,7 @@ The mod treats active save replacement as a data-loss risk and fails closed when
 2. Open `Multiplayer -> Host`.
 3. Choose `Standard`, `Daily`, or `Custom`.
 4. In `Multiplayer Saves`, choose `Start New Run` or select an existing campaign row.
-5. For an existing campaign, inspect the preview and press `Continue`.
+5. For an existing campaign, inspect the preview, use the small edit icon beside the title to rename the slot if needed, and press `Continue`.
 6. If a recovery prompt appears, choose `Duplicate Active Save` or `Sync Active Save` before switching.
 
 STS2 does not create a multiplayer save from a solo host lobby. A run must actually begin with at least one joined player before STS2 writes `current_run_mp.save` and the mod can finalize a new save slot.
@@ -79,13 +80,13 @@ tests/smoke-setup-local-tests.sh
 Create a local package without tagging:
 
 ```bash
-scripts/release-local.sh --package-only v0.1.0
+scripts/release-local.sh --package-only v0.1.1
 ```
 
 Publish a full release from a clean, synced `main` checkout:
 
 ```bash
-scripts/release-local.sh v0.1.0
+scripts/release-local.sh v0.1.1
 ```
 
 Before publishing, `MultiplayerSaveSlots.json` must have a `version` matching the tag without the leading `v`.
@@ -95,8 +96,8 @@ Before publishing, `MultiplayerSaveSlots.json` must have a `version` matching th
 The smoke setup script can install a package and stage local save fixtures. It does not automate STS2 menu clicks or Steam multiplayer.
 
 ```bash
-scripts/release-local.sh --package-only v0.1.0
-scripts/smoke-setup-local.sh install --tag v0.1.0
+scripts/release-local.sh --package-only v0.1.1
+scripts/smoke-setup-local.sh install --tag v0.1.1
 ```
 
 Capture and apply a real local active-save fixture:

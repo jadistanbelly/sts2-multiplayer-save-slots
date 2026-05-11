@@ -9,6 +9,7 @@ public interface IHostFlowSaveBank
     bool HasDeletedCampaigns();
     void ArchiveCampaign(string campaignId, DateTimeOffset deletedAtUtc);
     CampaignMetadata RestoreArchivedCampaign(string archiveKey);
+    CampaignMetadata RenameCampaign(string campaignId, string? customName);
     void DeleteCampaign(string campaignId);
     void DeleteArchivedCampaign(string archiveKey);
     void ClearDeletedCampaigns();

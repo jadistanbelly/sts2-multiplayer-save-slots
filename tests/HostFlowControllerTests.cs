@@ -15,6 +15,7 @@ public static class HostFlowControllerTests
         yield return new TestCase("host flow session clears selected and pending state", SessionClearsSelectedAndPendingState);
         yield return new TestCase("controller builds picker model with start new and campaign rows", ControllerBuildsPickerModel);
         yield return new TestCase("STS2 save bank adapter repairs listed campaign character ids from payload", SaveBankAdapterRepairsListedCampaignCharacterIdsFromPayload);
+        yield return new TestCase("STS2 save bank adapter repairs listed campaign progress from payload", SaveBankAdapterRepairsListedCampaignProgressFromPayload);
         yield return new TestCase("controller picker model exposes deleted save availability", ControllerPickerModelExposesDeletedSaveAvailability);
         yield return new TestCase("controller builds archive picker model with archived rows", ControllerBuildsArchivePickerModel);
         yield return new TestCase("picker model exposes default selected campaign", PickerModelExposesDefaultSelectedCampaign);
@@ -25,6 +26,8 @@ public static class HostFlowControllerTests
         yield return new TestCase("controller disambiguates duplicate picker rows", ControllerDisambiguatesDuplicatePickerRows);
         yield return new TestCase("picker subtitle omits unknown progress", PickerSubtitleOmitsUnknownProgress);
         yield return new TestCase("picker campaign row includes full details", PickerCampaignRowIncludesFullDetails);
+        yield return new TestCase("picker campaign row uses custom run name", PickerCampaignRowUsesCustomRunName);
+        yield return new TestCase("picker campaign row falls back when custom run name is cleared", PickerCampaignRowFallsBackWhenCustomRunNameCleared);
         yield return new TestCase("picker details show selected characters", PickerDetailsShowSelectedCharacters);
         yield return new TestCase("picker details handle missing progress and roster", PickerDetailsHandleMissingProgressAndRoster);
         yield return new TestCase("picker start new row has no details", PickerStartNewRowHasNoDetails);
@@ -64,6 +67,8 @@ public static class HostFlowControllerTests
         yield return new TestCase("recovery model reports unavailable when no options exist", RecoveryModelReportsUnavailableWhenNoOptionsExist);
         yield return new TestCase("controller archives selected campaign", ControllerArchivesSelectedCampaign);
         yield return new TestCase("controller reports archive campaign failure", ControllerReportsArchiveCampaignFailure);
+        yield return new TestCase("controller renames selected campaign", ControllerRenamesSelectedCampaign);
+        yield return new TestCase("controller reports rename campaign failure", ControllerReportsRenameCampaignFailure);
         yield return new TestCase("controller restores archived campaign", ControllerRestoresArchivedCampaign);
         yield return new TestCase("controller reports restore archived campaign failure", ControllerReportsRestoreArchivedCampaignFailure);
         yield return new TestCase("controller permanently deletes active campaign", ControllerPermanentlyDeletesActiveCampaign);
@@ -203,6 +208,36 @@ public static class HostFlowControllerTests
         AssertEx.Equal("CHARACTER.SILENT", campaigns[0].Roster[0].SelectedCharacterId);
         AssertEx.Equal("CHARACTER.IRONCLAD", campaigns[0].Roster[1].SelectedCharacterId);
         AssertEx.Equal("CHARACTER.SILENT", bank.GetCampaign(metadata.CampaignId).Roster[0].SelectedCharacterId);
+    }
+
+    private static void SaveBankAdapterRepairsListedCampaignProgressFromPayload()
+    {
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "source.save");
+        File.WriteAllText(
+            source,
+            """
+            {
+              "platform_type": "steam",
+              "current_act_index": 0,
+              "map_point_history": [["node-1"]],
+              "players": []
+            }
+            """);
+        var bank = new Storage.MultiplayerSaveBank(new Storage.SaveBankPaths(Path.Combine(temp.Path, "MultiSaves")));
+        var metadata = bank.CreateCampaign(new CampaignCreateRequest(
+            MultiplayerGameMode.Standard,
+            [],
+            source,
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            "Floor 2"));
+        var adapter = new Sts2SaveBankAdapter(bank);
+
+        var campaigns = adapter.ListCampaigns(MultiplayerGameMode.Standard);
+
+        AssertEx.Equal(1, campaigns.Count);
+        AssertEx.Equal("Act 1 - Floor 2", campaigns[0].ActOrFloor);
+        AssertEx.Equal("Act 1 - Floor 2", bank.GetCampaign(metadata.CampaignId).ActOrFloor);
     }
 
     private static void ControllerPickerModelExposesDeletedSaveAvailability()
@@ -448,18 +483,52 @@ public static class HostFlowControllerTests
 
         AssertEx.Equal("buddy1, buddy2 +2", details.Title);
         AssertEx.Equal("Floor 18 - 4 players", details.Subtitle);
-        AssertEx.Equal(6, details.SummaryLines.Count);
-        AssertEx.Equal("Progress: Floor 18", details.SummaryLines[0]);
-        AssertEx.Equal("Players: 4", details.SummaryLines[1]);
-        AssertEx.Equal("Created: 2026-05-08 00:00 UTC", details.SummaryLines[2]);
-        AssertEx.Equal("Last played: 2026-05-08 01:30 UTC", details.SummaryLines[3]);
-        AssertEx.Equal("Campaign id: aaaaaaaa", details.SummaryLines[4]);
-        AssertEx.Equal("Save fingerprint: checksum", details.SummaryLines[5]);
+        AssertEx.Equal(2, details.SummaryLines.Count);
+        AssertEx.Equal("Last played: 2026-05-08 01:30 UTC", details.SummaryLines[0]);
+        AssertEx.Equal("Save id: aaaaaaaa", details.SummaryLines[1]);
         AssertEx.Equal(4, details.RosterLines.Count);
         AssertEx.Equal("1. buddy1", details.RosterLines[0]);
         AssertEx.Equal("2. buddy2", details.RosterLines[1]);
         AssertEx.Equal("3. buddy3", details.RosterLines[2]);
         AssertEx.Equal("4. buddy4", details.RosterLines[3]);
+    }
+
+    private static void PickerCampaignRowUsesCustomRunName()
+    {
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard,
+            "phatstatss, Magical Crocs",
+            [new PlayerIdentity("steam:1", "phatstatss"), new PlayerIdentity("steam:2", "Magical Crocs")],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T01:00:00Z"),
+            null,
+            "payload",
+            "Floor 5",
+            "Friday Poison Run"));
+
+        AssertEx.Equal("Friday Poison Run", row.Title);
+        AssertEx.Equal("Floor 5 - 2 players", row.Subtitle);
+        AssertEx.Equal("Friday Poison Run", row.Details!.Title);
+        AssertEx.Equal(null, row.Details.AutoLabel);
+    }
+
+    private static void PickerCampaignRowFallsBackWhenCustomRunNameCleared()
+    {
+        var row = MultiplayerSavePickerRow.Campaign(new CampaignMetadata(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            MultiplayerGameMode.Standard,
+            "phatstatss, Magical Crocs",
+            [new PlayerIdentity("steam:1", "phatstatss"), new PlayerIdentity("steam:2", "Magical Crocs")],
+            DateTimeOffset.Parse("2026-05-08T00:00:00Z"),
+            DateTimeOffset.Parse("2026-05-08T01:00:00Z"),
+            null,
+            "payload",
+            "Floor 5",
+            null));
+
+        AssertEx.Equal("phatstatss, Magical Crocs", row.Title);
+        AssertEx.Equal(null, row.Details!.AutoLabel);
     }
 
     private static void PickerDetailsShowSelectedCharacters()
@@ -500,8 +569,9 @@ public static class HostFlowControllerTests
         var details = row.Details ?? throw new InvalidOperationException("Expected campaign details");
 
         AssertEx.Equal("0 players", row.Subtitle);
-        AssertEx.Equal("Progress: Unknown", details.SummaryLines[0]);
-        AssertEx.Equal("Players: 0", details.SummaryLines[1]);
+        AssertEx.Equal(2, details.SummaryLines.Count);
+        AssertEx.Equal("Last played: 2026-05-08 00:00 UTC", details.SummaryLines[0]);
+        AssertEx.Equal("Save id: bbbbbbbb", details.SummaryLines[1]);
         AssertEx.Equal(1, details.RosterLines.Count);
         AssertEx.Equal("Unknown party", details.RosterLines[0]);
     }
@@ -1082,6 +1152,31 @@ public static class HostFlowControllerTests
         AssertEx.Equal("archive failed", result.ErrorMessage);
     }
 
+    private static void ControllerRenamesSelectedCampaign()
+    {
+        var bank = new FakeHostFlowSaveBank();
+
+        var result = CreateController(bank).RenameCampaign(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "  Friday Poison Run  ");
+
+        AssertEx.True(result.Success);
+        AssertEx.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", bank.RenamedCampaignId);
+        AssertEx.Equal("  Friday Poison Run  ", bank.RenamedCustomName);
+    }
+
+    private static void ControllerReportsRenameCampaignFailure()
+    {
+        var bank = new FakeHostFlowSaveBank { RenameFailure = "rename failed" };
+
+        var result = CreateController(bank).RenameCampaign(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "Friday Poison Run");
+
+        AssertEx.False(result.Success);
+        AssertEx.Equal("rename failed", result.ErrorMessage);
+    }
+
     private static void ControllerRestoresArchivedCampaign()
     {
         var bank = new FakeHostFlowSaveBank();
@@ -1210,6 +1305,9 @@ public static class HostFlowControllerTests
         public string? ArchiveFailure { get; init; }
         public string? RestoredArchiveKey { get; private set; }
         public string? RestoreArchiveFailure { get; init; }
+        public string? RenamedCampaignId { get; private set; }
+        public string? RenamedCustomName { get; private set; }
+        public string? RenameFailure { get; init; }
         public string? DeletedCampaignId { get; private set; }
         public string? DeleteCampaignFailure { get; init; }
         public string? DeletedArchiveKey { get; private set; }
@@ -1241,6 +1339,17 @@ public static class HostFlowControllerTests
 
             RestoredArchiveKey = archiveKey;
             return ArchivedCampaigns.FirstOrDefault(archived => archived.ArchiveKey == archiveKey)?.Metadata
+                ?? CampaignWithRoster([]);
+        }
+
+        public CampaignMetadata RenameCampaign(string campaignId, string? customName)
+        {
+            if (RenameFailure is not null)
+                throw new InvalidOperationException(RenameFailure);
+
+            RenamedCampaignId = campaignId;
+            RenamedCustomName = customName;
+            return Campaigns.FirstOrDefault(campaign => campaign.CampaignId == campaignId)
                 ?? CampaignWithRoster([]);
         }
 

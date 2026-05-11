@@ -28,6 +28,12 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal exposes split panel helpers", PickerModalExposesSplitPanelHelpers);
         yield return new TestCase("picker modal exposes archive management helpers", PickerModalExposesArchiveManagementHelpers);
         yield return new TestCase("picker modal exposes active and archived save action helpers", PickerModalExposesSaveActionHelpers);
+        yield return new TestCase("picker modal exposes aligned footer helpers", PickerModalExposesAlignedFooterHelpers);
+        yield return new TestCase("picker modal keeps preview and footer action columns aligned", PickerModalKeepsPreviewAndFooterActionColumnsAligned);
+        yield return new TestCase("picker modal aligns right action stack with left footer", PickerModalAlignsRightActionStackWithLeftFooter);
+        yield return new TestCase("picker modal exposes custom rename helpers", PickerModalExposesCustomRenameHelpers);
+        yield return new TestCase("modal styling exposes text input styling", ModalStylingExposesTextInputStyling);
+        yield return new TestCase("picker modal keeps rename title row readable", PickerModalKeepsRenameTitleRowReadable);
         yield return new TestCase("picker modal exposes quick polish layout constants", PickerModalExposesQuickPolishLayoutConstants);
         yield return new TestCase("modal styling exposes action button variants", ModalStylingExposesActionButtonVariants);
         yield return new TestCase("modal styling exposes rounded card radius", ModalStylingExposesRoundedCardRadius);
@@ -188,12 +194,12 @@ public static class HostFlowPatchTests
         var details = new MultiplayerSavePickerDetails(
             "buddy1, buddy2",
             "Floor 18 - 2 players",
-            ["Progress: Floor 18", "Players: 2"],
+            ["Last played: 2026-05-08 01:30 UTC", "Save id: aaaaaaaa"],
             ["1. buddy1", "2. buddy2"]);
 
         var body = buildDetailsBody.Invoke(null, [details]);
 
-        AssertEx.Equal("Progress: Floor 18\nPlayers: 2\n\nRoster\n1. buddy1\n2. buddy2", body);
+        AssertEx.Equal("Last played: 2026-05-08 01:30 UTC\nSave id: aaaaaaaa\n\nRoster\n1. buddy1\n2. buddy2", body);
     }
 
     private static void PickerModalKeepsDetailsBodyReadableWidth()
@@ -365,6 +371,145 @@ public static class HostFlowPatchTests
         }
     }
 
+    private static void PickerModalExposesAlignedFooterHelpers()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var type = modalType!;
+
+        foreach (var methodName in new[]
+        {
+            "CreateAlignedFooterActions",
+            "CreateFooterLeftSlot",
+            "CreateFooterRightActions",
+            "CreateFooterRightContent",
+            "CreateActionButtonPlaceholder"
+        })
+        {
+            var method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+
+        var leftSlotWidth = InvokePrivateFloat(type, "GetFooterLeftSlotWidth");
+        var rightSlotWidth = InvokePrivateFloat(type, "GetFooterRightSlotWidth");
+        var rightContentWidth = InvokePrivateFloat(type, "GetFooterRightContentWidth");
+        var rightContentPadding = InvokePrivateFloat(type, "GetFooterRightContentPadding");
+        var campaignFrameWidth = InvokePrivateFloat(type, "GetCampaignListFrameWidth");
+        var previewFrameWidth = InvokePrivateFloat(type, "GetPreviewFrameWidth");
+        var previewContentWidth = InvokePrivateFloat(type, "GetPreviewContentWidth");
+        var bodySeparation = InvokePrivateFloat(type, "GetBodyColumnSeparation");
+
+        AssertEx.Equal(campaignFrameWidth, leftSlotWidth);
+        AssertEx.Equal(previewFrameWidth, rightSlotWidth);
+        AssertEx.Equal(previewContentWidth, rightContentWidth);
+        AssertEx.Equal((previewFrameWidth - previewContentWidth) / 2f, rightContentPadding);
+        AssertEx.Equal(16f, bodySeparation);
+    }
+
+    private static void PickerModalKeepsPreviewAndFooterActionColumnsAligned()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var type = modalType!;
+
+        foreach (var methodName in new[]
+        {
+            "BuildPickerColumns",
+            "BuildLeftPickerColumn",
+            "BuildRightPickerColumn",
+            "CreatePreviewActionRow",
+            "GetPreviewActionLeftColumnX",
+            "GetPreviewActionRightColumnX"
+        })
+        {
+            var method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+
+        var leftColumnX = InvokePrivateFloat(type, "GetPreviewActionLeftColumnX");
+        var rightColumnX = InvokePrivateFloat(type, "GetPreviewActionRightColumnX");
+        var previewContentWidth = InvokePrivateFloat(type, "GetPreviewContentWidth");
+        var actionButtonWidth = InvokePrivateFloat(type, "GetActionButtonWidth");
+
+        AssertEx.Equal(0f, leftColumnX);
+        AssertEx.Equal(previewContentWidth - actionButtonWidth, rightColumnX);
+    }
+
+    private static void PickerModalAlignsRightActionStackWithLeftFooter()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var type = modalType!;
+
+        foreach (var methodName in new[]
+        {
+            "BuildRightActionStack",
+            "GetCampaignListFrameHeight",
+            "GetPreviewDetailsFrameHeight",
+            "GetActionButtonHeight"
+        })
+        {
+            var method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+
+        var campaignFrameHeight = InvokePrivateFloat(type, "GetCampaignListFrameHeight");
+        var previewDetailsHeight = InvokePrivateFloat(type, "GetPreviewDetailsFrameHeight");
+        var columnFooterSeparation = InvokePrivateInt(type, "GetColumnFooterSeparation");
+        var actionButtonHeight = InvokePrivateFloat(type, "GetActionButtonHeight");
+        var pickerColumnHeight = InvokePrivateFloat(type, "GetPickerColumnHeight");
+
+        AssertEx.Equal(campaignFrameHeight, previewDetailsHeight + columnFooterSeparation + actionButtonHeight);
+        AssertEx.Equal(campaignFrameHeight + columnFooterSeparation + actionButtonHeight, pickerColumnHeight);
+    }
+
+    private static void PickerModalExposesCustomRenameHelpers()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+
+        foreach (var methodName in new[]
+        {
+            "CreatePreviewTitleRow",
+            "CreateRenameIconButton",
+            "ShowRenameModal",
+            "RenameSelectedCampaign"
+        })
+        {
+            var method = modalType!.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+    }
+
+    private static void ModalStylingExposesTextInputStyling()
+    {
+        var stylingType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.ModalUiStyling");
+        AssertEx.True(stylingType is not null);
+
+        var method = stylingType!.GetMethod("StyleTextInput", BindingFlags.Static | BindingFlags.Public);
+        AssertEx.True(method is not null, "StyleTextInput helper was not found");
+    }
+
+    private static void PickerModalKeepsRenameTitleRowReadable()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var type = modalType!;
+        var iconSizeMethod = type.GetMethod("GetRenameIconButtonSize", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("GetRenameIconButtonSize helper was not found");
+
+        var titleWidth = InvokePrivateFloat(type, "GetPreviewTitleMinimumWidth");
+        var previewWidth = InvokePrivateFloat(type, "GetPreviewContentWidth");
+        var iconSize = iconSizeMethod.Invoke(null, [])!;
+        var iconWidth = GetVector2Component(iconSize, "X");
+
+        AssertEx.True(titleWidth >= 360f, "Preview title needs stable width so names do not wrap one character per line");
+        AssertEx.True(iconWidth <= 44f, "Rename icon should stay compact beside the title");
+        AssertEx.True(
+            titleWidth + (iconWidth * 2f) + 16f <= previewWidth,
+            "Title row should reserve room for the edit icon without overflowing the preview panel");
+    }
+
     private static void PickerModalExposesQuickPolishLayoutConstants()
     {
         var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
@@ -420,6 +565,13 @@ public static class HostFlowPatchTests
         var method = type.GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException($"{methodName} helper was not found");
         return Convert.ToSingle(method.Invoke(null, [])!);
+    }
+
+    private static int InvokePrivateInt(Type type, string methodName)
+    {
+        var method = type.GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"{methodName} helper was not found");
+        return Convert.ToInt32(method.Invoke(null, [])!);
     }
 
     private static void RecoveryModalExposesExplicitUiBuilder()
