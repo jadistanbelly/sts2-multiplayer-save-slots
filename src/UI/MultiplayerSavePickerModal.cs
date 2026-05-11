@@ -93,66 +93,112 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
         ModalUiStyling.StyleTitle(title);
         root.AddChild(title);
 
-        var body = new HBoxContainer
-        {
-            CustomMinimumSize = new Vector2(940, 450),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill
-        };
-        body.AddThemeConstantOverride("separation", GetBodyColumnSeparation());
-        root.AddChild(body);
+        var columns = BuildPickerColumns();
+        root.AddChild(columns);
 
-        body.AddChild(BuildCampaignList());
-        body.AddChild(BuildPreviewPanel());
-
-        var actions = _archivesView ? BuildArchiveFooterActions() : BuildActiveFooterActions();
-        root.AddChild(actions);
-
-        _defaultFocusedControl ??= actions.GetChildren().OfType<Control>().FirstOrDefault();
+        _defaultFocusedControl ??= columns.GetChildren().OfType<Control>().FirstOrDefault();
     }
 
     private HBoxContainer BuildActiveFooterActions()
+    {
+        return CreateAlignedFooterActions(CreateCancelButton(), CreateArchivesButton(), CreateFooterContinueButton());
+    }
+
+    private HBoxContainer BuildArchiveFooterActions()
+    {
+        return CreateAlignedFooterActions(CreateBackButton(), null, CreateDeleteAllArchivesButton());
+    }
+
+    private HBoxContainer BuildPickerColumns()
+    {
+        var columns = new HBoxContainer
+        {
+            CustomMinimumSize = new Vector2(940, GetPickerColumnHeight()),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        columns.AddThemeConstantOverride("separation", GetBodyColumnSeparation());
+        columns.AddChild(BuildLeftPickerColumn());
+        columns.AddChild(BuildRightPickerColumn());
+        return columns;
+    }
+
+    private VBoxContainer BuildLeftPickerColumn()
+    {
+        var column = new VBoxContainer
+        {
+            CustomMinimumSize = new Vector2(GetCampaignListFrameWidth(), GetPickerColumnHeight()),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        column.AddThemeConstantOverride("separation", GetColumnFooterSeparation());
+        column.AddChild(BuildCampaignList());
+        column.AddChild(CreateFooterLeftSlot(_archivesView ? CreateBackButton() : CreateCancelButton()));
+        return column;
+    }
+
+    private VBoxContainer BuildRightPickerColumn()
+    {
+        var column = new VBoxContainer
+        {
+            CustomMinimumSize = new Vector2(GetPreviewFrameWidth(), GetPickerColumnHeight()),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        column.AddThemeConstantOverride("separation", GetColumnFooterSeparation());
+        column.AddChild(BuildPreviewPanel());
+        column.AddChild(_archivesView
+            ? CreateFooterRightActions(null, CreateDeleteAllArchivesButton())
+            : CreateFooterRightActions(CreateArchivesButton(), CreateFooterContinueButton()));
+        return column;
+    }
+
+    private Button CreateCancelButton()
     {
         var cancel = new Button { Text = "Cancel", CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44) };
         ModalUiStyling.StyleButton(cancel);
         cancel.Pressed += Close;
         _defaultFocusedControl ??= cancel;
-
-        Button? archives = null;
-        if (_model.HasDeletedCampaigns)
-        {
-            archives = new Button
-            {
-                Text = "Archives",
-                CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
-            };
-            ModalUiStyling.StyleButton(archives);
-            archives.Pressed += () => ShowArchives(_controller, _model.GameMode);
-        }
-
-        return CreateAlignedFooterActions(cancel, archives, CreateFooterContinueButton());
+        return cancel;
     }
 
-    private HBoxContainer BuildArchiveFooterActions()
+    private Button CreateBackButton()
     {
         var back = new Button { Text = "Back", CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44) };
         ModalUiStyling.StyleButton(back);
         back.Pressed += RefreshPicker;
         _defaultFocusedControl ??= back;
+        return back;
+    }
 
-        Button? deleteAll = null;
-        if (_model.HasDeletedCampaigns)
+    private Button? CreateArchivesButton()
+    {
+        if (!_model.HasDeletedCampaigns)
+            return null;
+
+        var archives = new Button
         {
-            deleteAll = new Button
-            {
-                Text = "Delete All Archives",
-                CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
-            };
-            ModalUiStyling.StyleDangerButton(deleteAll);
-            deleteAll.Pressed += ShowDeleteAllArchivesConfirmation;
-        }
+            Text = "Archives",
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
+        };
+        ModalUiStyling.StyleButton(archives);
+        archives.Pressed += () => ShowArchives(_controller, _model.GameMode);
+        return archives;
+    }
 
-        return CreateAlignedFooterActions(back, null, deleteAll);
+    private Button? CreateDeleteAllArchivesButton()
+    {
+        if (!_model.HasDeletedCampaigns)
+            return null;
+
+        var deleteAll = new Button
+        {
+            Text = "Delete All Archives",
+            CustomMinimumSize = new Vector2(GetActionButtonWidth(), 44)
+        };
+        ModalUiStyling.StyleDangerButton(deleteAll);
+        deleteAll.Pressed += ShowDeleteAllArchivesConfirmation;
+        return deleteAll;
     }
 
     private static HBoxContainer CreateAlignedFooterActions(Control leftAction, Control? rightLeftAction, Control? rightRightAction)
@@ -194,15 +240,23 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private static HBoxContainer CreateFooterRightContent(Control? leftAction, Control? rightAction)
     {
+        var actions = CreatePreviewActionRow(
+            leftAction ?? CreateActionButtonPlaceholder(),
+            rightAction ?? CreateActionButtonPlaceholder());
+        actions.CustomMinimumSize = new Vector2(GetFooterRightContentWidth(), 44);
+        return actions;
+    }
+
+    private static HBoxContainer CreatePreviewActionRow(Control leftAction, Control rightAction)
+    {
         var actions = new HBoxContainer
         {
-            CustomMinimumSize = new Vector2(GetFooterRightContentWidth(), 44),
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
         actions.AddThemeConstantOverride("separation", 10);
-        actions.AddChild(leftAction ?? CreateActionButtonPlaceholder());
+        actions.AddChild(leftAction);
         actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-        actions.AddChild(rightAction ?? CreateActionButtonPlaceholder());
+        actions.AddChild(rightAction);
         return actions;
     }
 
@@ -280,7 +334,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     {
         var frame = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(GetCampaignListFrameWidth(), 450),
+            CustomMinimumSize = new Vector2(GetCampaignListFrameWidth(), GetPreviewFrameHeight()),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             ClipContents = true
@@ -340,7 +394,7 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     {
         var frame = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(GetPreviewFrameWidth(), 450),
+            CustomMinimumSize = new Vector2(GetPreviewFrameWidth(), GetPreviewFrameHeight()),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             ClipContents = true
@@ -357,6 +411,10 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
 
     private static float GetPreviewContentWidth() => 510f;
 
+    private static float GetPickerColumnHeight() => GetPreviewFrameHeight() + GetColumnFooterSeparation() + 44f;
+
+    private static float GetPreviewFrameHeight() => 450f;
+
     private static float GetFooterLeftSlotWidth() => GetCampaignListFrameWidth();
 
     private static float GetFooterRightSlotWidth() => GetPreviewFrameWidth();
@@ -366,6 +424,12 @@ public sealed partial class MultiplayerSavePickerModal : Control, IScreenContext
     private static float GetFooterRightContentPadding() => (GetFooterRightSlotWidth() - GetFooterRightContentWidth()) / 2f;
 
     private static int GetBodyColumnSeparation() => 16;
+
+    private static int GetColumnFooterSeparation() => 12;
+
+    private static float GetPreviewActionLeftColumnX() => 0f;
+
+    private static float GetPreviewActionRightColumnX() => GetPreviewContentWidth() - GetActionButtonWidth();
 
     private static float GetPreviewTitleMinimumWidth() => 390f;
 

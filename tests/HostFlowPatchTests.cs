@@ -29,6 +29,7 @@ public static class HostFlowPatchTests
         yield return new TestCase("picker modal exposes archive management helpers", PickerModalExposesArchiveManagementHelpers);
         yield return new TestCase("picker modal exposes active and archived save action helpers", PickerModalExposesSaveActionHelpers);
         yield return new TestCase("picker modal exposes aligned footer helpers", PickerModalExposesAlignedFooterHelpers);
+        yield return new TestCase("picker modal keeps preview and footer action columns aligned", PickerModalKeepsPreviewAndFooterActionColumnsAligned);
         yield return new TestCase("picker modal exposes custom rename helpers", PickerModalExposesCustomRenameHelpers);
         yield return new TestCase("modal styling exposes text input styling", ModalStylingExposesTextInputStyling);
         yield return new TestCase("picker modal keeps rename title row readable", PickerModalKeepsRenameTitleRowReadable);
@@ -402,6 +403,35 @@ public static class HostFlowPatchTests
         AssertEx.Equal(previewContentWidth, rightContentWidth);
         AssertEx.Equal((previewFrameWidth - previewContentWidth) / 2f, rightContentPadding);
         AssertEx.Equal(16f, bodySeparation);
+    }
+
+    private static void PickerModalKeepsPreviewAndFooterActionColumnsAligned()
+    {
+        var modalType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.UI.MultiplayerSavePickerModal");
+        AssertEx.True(modalType is not null);
+        var type = modalType!;
+
+        foreach (var methodName in new[]
+        {
+            "BuildPickerColumns",
+            "BuildLeftPickerColumn",
+            "BuildRightPickerColumn",
+            "CreatePreviewActionRow",
+            "GetPreviewActionLeftColumnX",
+            "GetPreviewActionRightColumnX"
+        })
+        {
+            var method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+            AssertEx.True(method is not null, $"{methodName} helper was not found");
+        }
+
+        var leftColumnX = InvokePrivateFloat(type, "GetPreviewActionLeftColumnX");
+        var rightColumnX = InvokePrivateFloat(type, "GetPreviewActionRightColumnX");
+        var previewContentWidth = InvokePrivateFloat(type, "GetPreviewContentWidth");
+        var actionButtonWidth = InvokePrivateFloat(type, "GetActionButtonWidth");
+
+        AssertEx.Equal(0f, leftColumnX);
+        AssertEx.Equal(previewContentWidth - actionButtonWidth, rightColumnX);
     }
 
     private static void PickerModalExposesCustomRenameHelpers()
