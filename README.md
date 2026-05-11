@@ -4,9 +4,9 @@ Host-side Slay the Spire 2 mod for keeping separate multiplayer campaign saves. 
 
 ## Current Release
 
-Latest release: [v0.1.1](https://github.com/jadistanbelly/sts2-multiplayer-save-slots/releases/tag/v0.1.1)
+Latest release: [v0.2.0](https://github.com/jadistanbelly/sts2-multiplayer-save-slots/releases/tag/v0.2.0)
 
-Download `MultiplayerSaveSlots-v0.1.1.zip`, then extract the included `MultiplayerSaveSlots/` folder into your STS2 `mods/` directory.
+Download `MultiplayerSaveSlots-v0.2.0.zip`, then extract the included `MultiplayerSaveSlots/` folder into your STS2 `mods/` directory.
 
 ## What It Does
 
@@ -80,13 +80,13 @@ tests/smoke-setup-local-tests.sh
 Create a local package without tagging:
 
 ```bash
-scripts/release-local.sh --package-only v0.1.1
+scripts/release-local.sh --package-only v0.2.0
 ```
 
 Publish a full release from a clean, synced `main` checkout:
 
 ```bash
-scripts/release-local.sh v0.1.1
+scripts/release-local.sh v0.2.0
 ```
 
 Before publishing, `MultiplayerSaveSlots.json` must have a `version` matching the tag without the leading `v`.
@@ -96,8 +96,8 @@ Before publishing, `MultiplayerSaveSlots.json` must have a `version` matching th
 The smoke setup script can install a package and stage local save fixtures. It does not automate STS2 menu clicks or Steam multiplayer.
 
 ```bash
-scripts/release-local.sh --package-only v0.1.1
-scripts/smoke-setup-local.sh install --tag v0.1.1
+scripts/release-local.sh --package-only v0.2.0
+scripts/smoke-setup-local.sh install --tag v0.2.0
 ```
 
 Capture and apply a real local active-save fixture:
