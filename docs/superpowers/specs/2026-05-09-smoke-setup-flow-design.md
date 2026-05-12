@@ -1,5 +1,7 @@
 # Smoke Setup Flow Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Summary
 
 Phase 6 adds automation-assisted in-game smoke setup for Multiplayer Save Slots. It does not try to click through STS2 or automate Steam multiplayer. Instead, it automates the repeatable and risky setup work around packaging, installing the mod, backing up live save state, and applying known save fixtures before a short manual in-game checklist.

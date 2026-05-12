@@ -1,5 +1,7 @@
 # Activated Metadata Repair Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Summary
 
 Phase 9 repairs stale display metadata for existing bank campaigns when a campaign is selected and activated. This helps campaigns created before live roster extraction existed: once the campaign payload is safely copied into `current_run_mp.save`, the existing active-save metadata extractor can read whatever STS2 exposes and update missing roster/progress metadata in the bank.

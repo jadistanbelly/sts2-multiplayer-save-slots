@@ -1,5 +1,7 @@
 # Archive Restore And Delete Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Summary
 
 Bucket 2 turns the current recoverable delete into explicit archive management. Active saves get both `Archive` and permanent `Delete`; archived saves can be viewed, restored, individually deleted, or mass deleted. Permanent deletion is always behind a confirmation modal.

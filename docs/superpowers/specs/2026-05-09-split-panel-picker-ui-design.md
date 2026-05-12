@@ -1,5 +1,7 @@
 # Split Panel Picker UI Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Summary
 
 Replace the current campaign picker list-with-details-button layout with a split-panel picker. The goal is to make save selection easier to scan and compare while keeping the UI visually compatible with Slay the Spire 2 menus.

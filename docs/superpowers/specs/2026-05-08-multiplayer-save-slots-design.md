@@ -1,5 +1,7 @@
 # Multiplayer Save Slots Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Summary
 
 This mod adds multiple host-owned multiplayer campaign saves to Slay the Spire 2 without replacing the game's multiplayer rules. Today the host can only maintain one active multiplayer run. Starting a different run with another friend group requires abandoning the current multiplayer save.

@@ -1,5 +1,7 @@
 # Local Release Flow Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Summary
 
 Phase 5 adds a local, repeatable release flow for Multiplayer Save Slots. The release cannot be built on a normal GitHub-hosted runner because the mod project references STS2 assemblies from a local game install. Instead, releases are built from the developer machine that already has STS2 installed, then published to GitHub with `gh`.

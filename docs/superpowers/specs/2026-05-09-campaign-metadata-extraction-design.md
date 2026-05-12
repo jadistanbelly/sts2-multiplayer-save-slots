@@ -1,5 +1,7 @@
 # Campaign Metadata Extraction Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Summary
 
 Phase 7 adds real campaign metadata for Multiplayer Save Slots. Newly finalized or duplicated campaigns should no longer be labeled with placeholder roster data when the live multiplayer lobby exposes player information. The picker should also include best-effort run progress, such as act or floor, when that information can be read without mutating or depending on the raw STS2 save payload.

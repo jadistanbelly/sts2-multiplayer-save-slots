@@ -1,5 +1,7 @@
 # Picker Quick UI Polish Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Summary
 
 Apply the approved Bucket 1 visual polish to the multiplayer save picker without changing save behavior. This pass uses the selected B direction: a slightly narrower save list, a wider preview panel, softer corners, equal-width action buttons, and consistent action placement.

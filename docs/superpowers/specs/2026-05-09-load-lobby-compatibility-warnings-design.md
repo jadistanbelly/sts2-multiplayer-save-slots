@@ -1,5 +1,7 @@
 # Load-Lobby Compatibility Warnings Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Summary
 
 Phase 10 adds a conservative warning when an existing campaign's stored original roster appears to differ from the current load lobby participants. The warning runs at the host's embark attempt, after the campaign has already been safely activated and after vanilla has built the load lobby. It does not rewrite saves, does not alter lobby membership, and does not replace vanilla validation.

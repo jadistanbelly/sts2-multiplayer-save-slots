@@ -1,5 +1,7 @@
 # Campaign Picker Details Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Summary
 
 Phase 8 adds an on-demand details surface to the Multiplayer Save Slots picker. Phase 7 stores real roster and progress metadata, but the picker still shows only compact row text. This phase makes the full stored metadata visible without making the main picker rows noisy.

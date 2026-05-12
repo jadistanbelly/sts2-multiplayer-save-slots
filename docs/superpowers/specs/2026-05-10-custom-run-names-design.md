@@ -1,5 +1,7 @@
 # Custom Run Names Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Goal
 
 Let the host assign a custom name to a multiplayer save slot so runs with the same players, characters, act, or floor can still be identified quickly.

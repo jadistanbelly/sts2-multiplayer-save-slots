@@ -1,5 +1,7 @@
 # Picker Parchment UI And Delete Design
 
+> **Archived historical spec:** This design note is preserved for context only. It is not an active spec or current work item. See `docs/superpowers/README.md` for archive policy.
+
 ## Summary
 
 Update the split-panel picker toward the approved Scroll Card Menu direction and add a selected-save delete action. The UI should feel closer to Slay the Spire menus by using parchment/card colors, gold headers, teal primary actions, and red destructive actions.
