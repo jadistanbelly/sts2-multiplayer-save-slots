@@ -15,7 +15,8 @@ Download `MultiplayerSaveSlots-v0.2.0.zip`, then extract the included `Multiplay
 - Starts a new managed multiplayer campaign or continues an existing one.
 - Swaps the selected campaign payload into STS2's active multiplayer save before loading.
 - Syncs the active save back to the selected campaign after STS2 writes progress.
-- Shows roster, progress, timestamps, short campaign id, save fingerprint, and selected characters when STS2 metadata is readable.
+- Shows roster, selected characters, progress, last-played timestamp, and a short save id when STS2 metadata is readable.
+- Lets the host archive, restore, or permanently delete save slots with confirmation prompts.
 - Adds recovery choices for unmanaged or unsynced active multiplayer saves.
 - Warns before embarking when the loaded-run lobby participants do not match the selected campaign roster.
 
@@ -37,7 +38,8 @@ The mod treats active save replacement as a data-loss risk and fails closed when
 3. Choose `Standard`, `Daily`, or `Custom`.
 4. In `Multiplayer Saves`, choose `Start New Run` or select an existing campaign row.
 5. For an existing campaign, inspect the preview, use the small edit icon beside the title to rename the slot if needed, and press `Continue`.
-6. If a recovery prompt appears, choose `Duplicate Active Save` or `Sync Active Save` before switching.
+6. Use `Archive` for reversible cleanup, `Archives` to restore archived slots, or `Delete` when a save should be permanently removed.
+7. If a recovery prompt appears, choose `Duplicate Active Save` or `Sync Active Save` before switching.
 
 STS2 does not create a multiplayer save from a solo host lobby. A run must actually begin with at least one joined player before STS2 writes `current_run_mp.save` and the mod can finalize a new save slot.
 
@@ -56,6 +58,11 @@ The save bank is stored beside STS2's active multiplayer save:
         metadata.json
         multiplayer_run.save
         backup/
+    deleted/
+      <timestamp>-<campaign-id>/
+        metadata.json
+        multiplayer_run.save
+        backup/
 ```
 
 ## Known Limits
@@ -63,7 +70,7 @@ The save bank is stored beside STS2's active multiplayer save:
 - This is local host save management, not cloud sync or cross-host campaign transfer.
 - Roster, character, and progress labels are best-effort because they depend on what STS2 exposes in current lobby/save data.
 - Older saves can appear as `Unknown party` until they are selected and metadata repair can read live STS2 data.
-- UI polish is still early; the current priority is safe save switching.
+- Character icons use STS2 assets when available and fall back to short badges when an icon cannot be resolved.
 
 ## Build And Test
 
@@ -74,6 +81,16 @@ DOTNET_ROLL_FORWARD=Major dotnet build MultiplayerSaveSlots.sln
 DOTNET_ROLL_FORWARD=Major dotnet run --project tests/MultiplayerSaveSlots.Tests.csproj
 tests/smoke-setup-local-tests.sh
 ```
+
+## Developer Tools
+
+`tools/Sts2Inspector` is a developer-only .NET console helper for inspecting the local STS2 assembly while discovering hook points. It is not included in the mod package and is not required by players.
+
+```bash
+DOTNET_ROLL_FORWARD=Major dotnet run --project tools/Sts2Inspector/Sts2Inspector.csproj -- /path/to/sts2.dll
+```
+
+Without an explicit path, the tool tries the default Steam STS2 data path for the current OS.
 
 ## Package And Release
 
@@ -103,9 +120,11 @@ scripts/smoke-setup-local.sh install --tag v0.2.0
 Capture and apply a real local active-save fixture:
 
 ```bash
-ACTIVE_SAVE="$HOME/.local/share/Steam/steamapps/common/Slay the Spire 2/preferences/profile_1/saves/current_run_mp.save"
+ACTIVE_SAVE="<profile saves>/current_run_mp.save"
 scripts/smoke-setup-local.sh capture-fixture --name unmanaged-active --active-save-path "$ACTIVE_SAVE"
 scripts/smoke-setup-local.sh apply-fixture --name unmanaged-active --active-save-path "$ACTIVE_SAVE"
 ```
+
+On Linux, STS2 profile saves are commonly under `$HOME/.local/share/SlayTheSpire2/steam/<steam-id>/profile1/saves/`.
 
 Smoke reports and backups are written under `artifacts/smoke/`.
