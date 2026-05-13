@@ -1,10 +1,11 @@
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Saves.Managers;
 using MultiplayerSaveSlots.Runtime;
 
 namespace MultiplayerSaveSlots.Patches;
 
-[HarmonyPatch(typeof(RunSaveManager), nameof(RunSaveManager.SaveRun))]
+[HarmonyPatch(typeof(RunSaveManager), nameof(RunSaveManager.SaveRun), new Type[] { typeof(AbstractRoom) })]
 public static class RunSaveManagerPatch
 {
     [HarmonyPostfix]

@@ -1,0 +1,34 @@
+name: Sync Nexus Posts
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    name: Sync Nexus posts to GitHub issues
+    if: ${{ vars.NEXUSMODS_COMMENT_THREAD_ID != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Sync Nexus posts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NEXUSMODS_COMMENT_THREAD_ID: ${{ vars.NEXUSMODS_COMMENT_THREAD_ID }}
+          NEXUSMODS_GRAPHQL_TOKEN: ${{ secrets.NEXUSMODS_GRAPHQL_TOKEN }}
+          NEXUSMODS_POSTS_URL: ${{ vars.NEXUSMODS_POSTS_URL }}
+          NEXUS_ISSUE_LABELS: nexus-post
+        run: node scripts/sync-nexus-posts-to-github.mjs sync

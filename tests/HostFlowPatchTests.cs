@@ -17,6 +17,7 @@ public static class HostFlowPatchTests
         yield return new TestCase("run save manager patch logs sync failure without failing vanilla save", RunSaveManagerPatchLogsSyncFailure);
         yield return new TestCase("run save manager patch propagates vanilla task failure", RunSaveManagerPatchPropagatesVanillaFailure);
         yield return new TestCase("run save manager patch exposes postfix", RunSaveManagerPatchExposesPostfix);
+        yield return new TestCase("run save manager patch targets abstract room save overload", RunSaveManagerPatchTargetsAbstractRoomSaveOverload);
         yield return new TestCase("recovery modal exposes show method", RecoveryModalExposesShowMethod);
         yield return new TestCase("picker modal builds details body text", PickerModalBuildsDetailsBodyText);
         yield return new TestCase("picker modal keeps details body readable width", PickerModalKeepsDetailsBodyReadableWidth);
@@ -175,6 +176,31 @@ public static class HostFlowPatchTests
         AssertEx.True(patchType is not null);
         var postfix = patchType!.GetMethod("Postfix", BindingFlags.Static | BindingFlags.Public);
         AssertEx.True(postfix is not null);
+    }
+
+    private static void RunSaveManagerPatchTargetsAbstractRoomSaveOverload()
+    {
+        var patchType = typeof(MultiplayerSaveGameModeMap).Assembly.GetType("MultiplayerSaveSlots.Patches.RunSaveManagerPatch");
+        AssertEx.True(patchType is not null);
+        var harmonyPatchAttributes = patchType!.GetCustomAttributesData()
+            .Where(attribute => attribute.AttributeType.FullName == "HarmonyLib.HarmonyPatch")
+            .ToArray();
+
+        AssertEx.True(
+            harmonyPatchAttributes.Any(attribute => attribute.ConstructorArguments.Any(argument =>
+                AttributeArgumentContainsTypeName(argument, "MegaCrit.Sts2.Core.Rooms.AbstractRoom"))),
+            "RunSaveManagerPatch must declare the AbstractRoom SaveRun overload so Harmony does not resolve an ambiguous SaveRun target.");
+    }
+
+    private static bool AttributeArgumentContainsTypeName(CustomAttributeTypedArgument argument, string expectedTypeName)
+    {
+        if (argument.Value is Type type)
+            return type.FullName == expectedTypeName;
+
+        if (!argument.ArgumentType.IsArray || argument.Value is not IReadOnlyCollection<CustomAttributeTypedArgument> values)
+            return false;
+
+        return values.Any(value => AttributeArgumentContainsTypeName(value, expectedTypeName));
     }
 
     private static void RecoveryModalExposesShowMethod()
