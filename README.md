@@ -108,6 +108,8 @@ scripts/release-local.sh v0.2.0
 
 Before publishing, `MultiplayerSaveSlots.json` must have a `version` matching the tag without the leading `v`.
 
+GitHub Actions can upload published GitHub Releases to Nexus Mods and sync Nexus posts into GitHub issues. Setup details are in [docs/nexus-github-automation.md](docs/nexus-github-automation.md).
+
 ## Manual Smoke Setup
 
 The smoke setup script can install a package and stage local save fixtures. It does not automate STS2 menu clicks or Steam multiplayer.
