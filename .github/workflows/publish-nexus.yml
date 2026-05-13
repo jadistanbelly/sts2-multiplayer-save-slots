@@ -45,6 +45,17 @@ jobs:
           filename: ${{ steps.release.outputs.filename }}
           version: ${{ steps.release.outputs.version }}
           display_name: ${{ steps.release.outputs.display_name }}
-          description: Automated upload from GitHub Release ${{ github.event.release.tag_name }}.
+          description: |
+            Install:
+            1. Download this zip file.
+            2. Extract the included MultiplayerSaveSlots folder into your Slay the Spire 2 mods directory.
+            3. Launch Slay the Spire 2 with mods enabled.
+            4. Open Multiplayer -> Host, then choose Standard, Daily, or Custom.
+            5. Use Start New Run for a new managed campaign, or select an existing save and press Continue.
+
+            Notes:
+            - The host must install this mod.
+            - Guests do not need it for save-slot management unless they also plan to host their own multiplayer saves.
+            - Release notes: https://github.com/${{ github.repository }}/releases/tag/${{ github.event.release.tag_name }}
           file_category: main
           archive_existing_file: true
