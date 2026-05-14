@@ -15,37 +15,28 @@ The workflow skips draft and prerelease GitHub Releases. It also skips if `NEXUS
 
 ## Nexus Posts to GitHub Issues
 
-`.github/workflows/sync-nexus-posts.yml` runs every six hours and can also be run manually. It reads a Nexus GraphQL comment thread and creates one GitHub issue per new Nexus comment.
+`.github/workflows/sync-nexus-posts.yml` runs every six hours and can also be run manually. It reads the Nexus legacy Posts widget and creates one GitHub issue per top-level Nexus post. Nexus replies under that post are mirrored as GitHub issue comments.
 
-Set these GitHub repository settings:
+The workflow does not need a Nexus secret. It uses a browser-like fetch because normal GitHub Actions HTTP requests are blocked by Cloudflare on the public Nexus HTML endpoint.
 
-- Variable `NEXUSMODS_COMMENT_THREAD_ID`: Nexus GraphQL comment thread ID for the mod posts thread. This is not necessarily the public `comment_id` query value from a Nexus URL.
-- Optional variable `NEXUSMODS_POSTS_URL`: public Nexus Posts URL. Defaults to `https://www.nexusmods.com/slaythespire2/mods/887?tab=posts`.
-- Optional secret `NEXUSMODS_GRAPHQL_TOKEN`: OAuth bearer token for Nexus GraphQL if the thread requires authentication.
+Optional GitHub repository variables:
 
-Synced issues include a hidden marker like `nexus-comment-id:123` so reruns do not create duplicates.
+- `NEXUSMODS_POSTS_URL`: public Nexus Posts URL. Defaults to `https://www.nexusmods.com/slaythespire2/mods/887?tab=posts`.
+- `NEXUSMODS_GAME_ID`: Nexus game ID. Defaults to `8916`.
+- `NEXUSMODS_MOD_ID`: Nexus mod ID. Defaults to `887`.
+- `NEXUSMODS_POSTS_THREAD_ID`: Nexus legacy Posts thread ID. Defaults to `16873160`.
+
+Synced issues and comments include a hidden marker like `nexus-comment-id:123` so reruns do not create duplicates. New issues receive `nexus-post` and `needs-triage`; posts that look like crash/error reports also receive `probable-bug`.
+
+Run a local dry-run with:
+
+```bash
+python -m pip install curl_cffi
+python scripts/sync_nexus_posts_to_github.py dry-run
+```
 
 ## GitHub Issues to Nexus Replies
 
-`.github/workflows/reply-nexus-post.yml` listens for new GitHub issue comments starting with `/nexus-reply`. It only runs for comments from repository owners, members, or collaborators.
+Bidirectional replies are intentionally disabled for now.
 
-Use either form:
-
-```text
-/nexus-reply
-Your public Nexus reply text.
-```
-
-```text
-/nexus-reply 123
-Your public Nexus reply text.
-```
-
-The first form replies to the Nexus comment ID stored in the synced issue body. The second form replies to an explicit Nexus comment ID.
-
-This workflow requires:
-
-- Variable `NEXUSMODS_COMMENT_THREAD_ID`
-- Secret `NEXUSMODS_GRAPHQL_TOKEN`
-
-Replies are public on Nexus Mods. Keep private debugging notes in normal GitHub issue comments that do not start with `/nexus-reply`.
+The mod Posts and Bugs tabs are backed by Nexus legacy web widgets, not the Nexus GraphQL comment system. Read-only syncing is stable enough for GitHub Actions, but posting back would require mimicking logged-in browser requests and is likely to be brittle.
