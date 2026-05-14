@@ -348,7 +348,7 @@ def build_widget_url(env: dict[str, str], origin: str = DEFAULT_NEXUS_ORIGIN, pa
 
 
 def is_cloudflare_challenge(text: str) -> bool:
-    return "Just a moment..." in text or "cf-chl" in text or "challenges.cloudflare.com" in text
+    return "<title>Just a moment...</title>" in text or "cf-chl" in text
 
 
 class GitHubClient:

@@ -7,6 +7,7 @@ from scripts.sync_nexus_posts_to_github import (
     build_issue_title,
     build_reply_comment_body,
     group_comments_by_root,
+    is_cloudflare_challenge,
     is_probable_bug,
     parse_legacy_comments,
 )
@@ -103,6 +104,11 @@ class NexusLegacyPostTests(unittest.TestCase):
         self.assertIn("<!-- nexus-comment-id:169591664 -->", body)
         self.assertIn("Synced reply from Nexus Mods.", body)
         self.assertIn("Thanks for the detailed log", body)
+
+    def test_cloudflare_detection_does_not_match_arbitrary_url_text(self):
+        self.assertTrue(is_cloudflare_challenge("<html><head><title>Just a moment...</title></head></html>"))
+        self.assertTrue(is_cloudflare_challenge("<script id=\"cf-chl-widget\"></script>"))
+        self.assertFalse(is_cloudflare_challenge("Docs mention https://challenges.cloudflare.com without a challenge page."))
 
 
 if __name__ == "__main__":
