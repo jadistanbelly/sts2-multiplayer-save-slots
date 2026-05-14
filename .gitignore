@@ -8,3 +8,4 @@ TestResults/
 
 .worktrees/
 artifacts/
+__pycache__/
