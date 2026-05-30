@@ -33,4 +33,5 @@ jobs:
           NEXUSMODS_GAME_ID: ${{ vars.NEXUSMODS_GAME_ID }}
           NEXUSMODS_MOD_ID: ${{ vars.NEXUSMODS_MOD_ID }}
           NEXUSMODS_POSTS_THREAD_ID: ${{ vars.NEXUSMODS_POSTS_THREAD_ID }}
+          NEXUSMODS_ALLOW_FETCH_FAILURE: ${{ github.event_name == 'schedule' }}
         run: python scripts/sync_nexus_posts_to_github.py sync

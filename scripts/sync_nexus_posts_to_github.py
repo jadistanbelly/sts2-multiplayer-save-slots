@@ -25,6 +25,7 @@ DEFAULT_PAGE_SIZE = 10
 BASE_LABELS = ["nexus-post", "needs-triage"]
 BUG_LABEL = "probable-bug"
 VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
+FETCH_FAILURE_PREFIX = "Nexus posts fetch failed:"
 
 
 @dataclass(frozen=True)
@@ -126,7 +127,11 @@ class _LegacyCommentParser(HTMLParser):
 
         self._depth = end_depth
         if tag == "li":
-            while self._active_comments and self._depth <= self._active_comments[-1][1]:
+            # Nexus widget fragments can include unbalanced closing tags. Pop the closing
+            # comment first so its parent survives for later sibling replies.
+            if self._active_comments and self._depth <= self._active_comments[-1][1]:
+                self._active_comments.pop()
+            while self._active_comments and self._depth < self._active_comments[-1][1]:
                 self._active_comments.pop()
 
     def handle_data(self, data: str) -> None:
@@ -316,7 +321,7 @@ def fetch_nexus_posts_html(env: dict[str, str]) -> str:
         )
         text = response.text
         if response.status_code != 200 or is_cloudflare_challenge(text):
-            raise RuntimeError(f"Nexus posts fetch failed: HTTP {response.status_code}")
+            raise RuntimeError(f"{FETCH_FAILURE_PREFIX} HTTP {response.status_code}")
 
         comments = parse_legacy_comments(text, posts_url=posts_url)
         new_ids = {comment.id for comment in comments} - seen_ids
@@ -510,7 +515,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--html-file", help="Read a saved Nexus CommentContainer HTML response instead of fetching live posts.")
     args = parser.parse_args(argv)
 
-    comments = load_comments(args, os.environ)
+    try:
+        comments = load_comments(args, os.environ)
+    except RuntimeError as error:
+        if is_allowed_fetch_failure(os.environ, error):
+            print(f"{error}; skipping Nexus sync because fetch failures are allowed.", file=sys.stderr)
+            return 0
+        raise
     sync_to_github(comments, os.environ, dry_run=args.mode == "dry-run")
     return 0
 
@@ -518,6 +529,14 @@ def main(argv: list[str] | None = None) -> int:
 def env_value(env: dict[str, str], name: str, default: str) -> str:
     value = env.get(name)
     return value if value else default
+
+
+def is_allowed_fetch_failure(env: dict[str, str], error: RuntimeError) -> bool:
+    return env_flag(env, "NEXUSMODS_ALLOW_FETCH_FAILURE") and str(error).startswith(FETCH_FAILURE_PREFIX)
+
+
+def env_flag(env: dict[str, str], name: str) -> bool:
+    return env.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 if __name__ == "__main__":
