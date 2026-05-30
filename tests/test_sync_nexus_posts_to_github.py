@@ -1,6 +1,10 @@
 import textwrap
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
+from unittest import mock
 
+import scripts.sync_nexus_posts_to_github as sync
 from scripts.sync_nexus_posts_to_github import (
     build_issue_body,
     build_issue_labels,
@@ -57,6 +61,50 @@ LEGACY_COMMENTS_HTML = textwrap.dedent(
     """
 )
 
+NEXUS_WIDGET_SIBLING_REPLIES_HTML = textwrap.dedent(
+    """
+    <ol>
+      <li class="comment" id="comment-170129321">
+        <div class="comment-head clearfix">
+          <span class="comment-name"><a href="https://next.nexusmods.com/profile/QrowWasTaken">QrowWasTaken</a></span>
+        </div>
+        <div class="comment-content">
+          <time class="dst-date-adjust" data-date="1779784699">26 May 2026, 8:38AM</time>
+          <div class="comment-content-text" id="comment-content-170129321">
+            Original report.
+          </div>
+        </div>
+        </div>
+        </div>
+        <ol class="comment-kids">
+          <li class="comment comment-author" id="comment-170166845">
+            <div class="comment-head clearfix">
+              <span class="comment-name"><a href="https://next.nexusmods.com/profile/asixet">asixet</a></span>
+            </div>
+            <div class="comment-content">
+              <time class="dst-date-adjust" data-date="1779857746">27 May 2026, 4:55AM</time>
+              <div class="comment-content-text" id="comment-content-170166845">
+                First maintainer reply.
+              </div>
+            </div>
+          </li>
+          <li class="comment comment-author" id="comment-170207702">
+            <div class="comment-head clearfix">
+              <span class="comment-name"><a href="https://next.nexusmods.com/profile/asixet">asixet</a></span>
+            </div>
+            <div class="comment-content">
+              <time class="dst-date-adjust" data-date="1779943995">28 May 2026, 4:53AM</time>
+              <div class="comment-content-text" id="comment-content-170207702">
+                Follow-up maintainer reply.
+              </div>
+            </div>
+          </li>
+        </ol>
+      </li>
+    </ol>
+    """
+)
+
 
 class NexusLegacyPostTests(unittest.TestCase):
     def test_parses_legacy_comment_html_with_reply_parents(self):
@@ -85,6 +133,15 @@ class NexusLegacyPostTests(unittest.TestCase):
         self.assertEqual(groups[0].root.id, "169576439")
         self.assertEqual([reply.id for reply in groups[0].replies], ["169591664", "169591736"])
 
+    def test_groups_sibling_replies_under_parent_when_widget_fragment_depth_is_unbalanced(self):
+        comments = parse_legacy_comments(NEXUS_WIDGET_SIBLING_REPLIES_HTML)
+
+        groups = group_comments_by_root(comments)
+
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0].root.id, "170129321")
+        self.assertEqual([reply.id for reply in groups[0].replies], ["170166845", "170207702"])
+
     def test_builds_issue_content_and_probable_bug_labels(self):
         root = parse_legacy_comments(LEGACY_COMMENTS_HTML)[0]
 
@@ -109,6 +166,21 @@ class NexusLegacyPostTests(unittest.TestCase):
         self.assertTrue(is_cloudflare_challenge("<html><head><title>Just a moment...</title></head></html>"))
         self.assertTrue(is_cloudflare_challenge("<script id=\"cf-chl-widget\"></script>"))
         self.assertFalse(is_cloudflare_challenge("Docs mention https://challenges.cloudflare.com without a challenge page."))
+
+    def test_main_allows_fetch_failures_when_configured(self):
+        with mock.patch.dict(sync.os.environ, {"NEXUSMODS_ALLOW_FETCH_FAILURE": "1"}), mock.patch(
+            "scripts.sync_nexus_posts_to_github.fetch_nexus_posts_html",
+            side_effect=RuntimeError("Nexus posts fetch failed: HTTP 403"),
+        ), redirect_stderr(StringIO()):
+            self.assertEqual(sync.main(["sync"]), 0)
+
+    def test_main_raises_fetch_failures_by_default(self):
+        with mock.patch.dict(sync.os.environ, {}, clear=True), mock.patch(
+            "scripts.sync_nexus_posts_to_github.fetch_nexus_posts_html",
+            side_effect=RuntimeError("Nexus posts fetch failed: HTTP 403"),
+        ):
+            with self.assertRaises(RuntimeError):
+                sync.main(["sync"])
 
 
 if __name__ == "__main__":

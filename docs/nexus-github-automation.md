@@ -19,6 +19,8 @@ The workflow skips draft and prerelease GitHub Releases. It also skips if `NEXUS
 
 The workflow does not need a Nexus secret. It uses a browser-like fetch because normal GitHub Actions HTTP requests are blocked by Cloudflare on the public Nexus HTML endpoint.
 
+Scheduled runs treat Nexus fetch failures such as intermittent Cloudflare HTTP 403 responses as skipped syncs instead of failed builds. Manual workflow runs still fail on fetch errors so they can be debugged directly.
+
 Optional GitHub repository variables:
 
 - `NEXUSMODS_POSTS_URL`: public Nexus Posts URL. Defaults to `https://www.nexusmods.com/slaythespire2/mods/887?tab=posts`.
