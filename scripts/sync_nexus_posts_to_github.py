@@ -53,6 +53,8 @@ class _LegacyCommentParser(HTMLParser):
         self._comment_by_id: dict[str, dict[str, str | None]] = {}
         self._depth = 0
         self._active_comments: list[tuple[str, int]] = []
+        self._ol_comment_kids_parents: list[str | None] = []
+        self._active_comment_kids_parents: list[str] = []
         self._capture_author_for: str | None = None
         self._capture_author_depth: int | None = None
         self._capture_body_for: str | None = None
@@ -63,9 +65,20 @@ class _LegacyCommentParser(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = {name: value or "" for name, value in attrs}
         start_depth = self._depth
+        classes = set(attrs_dict.get("class", "").split())
+        if tag == "ol":
+            # Keep the thread parent from comment-kids blocks even when malformed
+            # markup causes the generic depth stack to lose the active comment.
+            parent_id = self._active_comments[-1][0] if self._active_comments else None
+            if "comment-kids" not in classes:
+                parent_id = None
+            self._ol_comment_kids_parents.append(parent_id)
+            if parent_id:
+                self._active_comment_kids_parents.append(parent_id)
+
         comment_id = self._comment_id_from_attrs(tag, attrs_dict)
         if comment_id:
-            parent_id = self._active_comments[-1][0] if self._active_comments else None
+            parent_id = self._active_comments[-1][0] if self._active_comments else self._current_comment_kids_parent_id()
             comment = {
                 "id": comment_id,
                 "author": None,
@@ -83,7 +96,6 @@ class _LegacyCommentParser(HTMLParser):
             self._depth += 1
 
         current_id = self._active_comments[-1][0] if self._active_comments else None
-        classes = set(attrs_dict.get("class", "").split())
 
         if current_id and tag == "span" and "comment-name" in classes:
             self._capture_author_for = current_id
@@ -134,6 +146,15 @@ class _LegacyCommentParser(HTMLParser):
             while self._active_comments and self._depth < self._active_comments[-1][1]:
                 self._active_comments.pop()
 
+        if tag == "ol" and self._ol_comment_kids_parents:
+            parent_id = self._ol_comment_kids_parents.pop()
+            if (
+                parent_id
+                and self._active_comment_kids_parents
+                and self._active_comment_kids_parents[-1] == parent_id
+            ):
+                self._active_comment_kids_parents.pop()
+
     def handle_data(self, data: str) -> None:
         if self._capture_author_for:
             self._author_chunks.append(data)
@@ -145,6 +166,9 @@ class _LegacyCommentParser(HTMLParser):
             return None
         match = re.fullmatch(r"comment-(\d+)", attrs.get("id", ""))
         return match.group(1) if match else None
+
+    def _current_comment_kids_parent_id(self) -> str | None:
+        return self._active_comment_kids_parents[-1] if self._active_comment_kids_parents else None
 
 def parse_legacy_comments(html_text: str, posts_url: str = DEFAULT_POSTS_URL) -> list[NexusComment]:
     parser = _LegacyCommentParser(posts_url)
