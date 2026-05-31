@@ -105,6 +105,66 @@ NEXUS_WIDGET_SIBLING_REPLIES_HTML = textwrap.dedent(
     """
 )
 
+NEXUS_WIDGET_REPLY_CONTINUATION_HTML = textwrap.dedent(
+    """
+    <div>
+    <div>
+    <ol>
+      <li class="comment" id="comment-170129321">
+        <div class="comment-head clearfix">
+          <span class="comment-name"><a href="https://next.nexusmods.com/profile/QrowWasTaken">QrowWasTaken</a></span>
+        </div>
+        <div class="comment-content">
+          <time class="dst-date-adjust" data-date="1779784699">26 May 2026, 8:38AM</time>
+          <div class="comment-content-text" id="comment-content-170129321">
+            Original report.
+          </div>
+        </div>
+        </div>
+        </div>
+        </div>
+        <ol class="comment-kids">
+          <li class="comment comment-author" id="comment-170166845">
+            <div class="comment-head clearfix">
+              <span class="comment-name"><a href="https://next.nexusmods.com/profile/asixet">asixet</a></span>
+            </div>
+            <div class="comment-content">
+              <time class="dst-date-adjust" data-date="1779857746">27 May 2026, 4:55AM</time>
+              <div class="comment-content-text" id="comment-content-170166845">
+                First maintainer reply.
+              </div>
+            </div>
+          </li>
+          <li class="comment comment-author" id="comment-170207702">
+            <div class="comment-head clearfix">
+              <span class="comment-name"><a href="https://next.nexusmods.com/profile/asixet">asixet</a></span>
+            </div>
+            <div class="comment-content">
+              <time class="dst-date-adjust" data-date="1779943995">28 May 2026, 4:53AM</time>
+              <div class="comment-content-text" id="comment-content-170207702">
+                Second maintainer reply with markup that unbalances parser depth.
+              </div>
+            </div>
+          </li>
+          <li class="comment comment-author" id="comment-170292092">
+            <div class="comment-head clearfix">
+              <span class="comment-name"><a href="https://next.nexusmods.com/profile/asixet">asixet</a></span>
+            </div>
+            <div class="comment-content">
+              <time class="dst-date-adjust" data-date="1780117772">30 May 2026, 5:09AM</time>
+              <div class="comment-content-text" id="comment-content-170292092">
+                Hi again, please test this build.
+              </div>
+            </div>
+          </li>
+        </ol>
+      </li>
+    </ol>
+    </div>
+    </div>
+    """
+)
+
 
 class NexusLegacyPostTests(unittest.TestCase):
     def test_parses_legacy_comment_html_with_reply_parents(self):
@@ -141,6 +201,15 @@ class NexusLegacyPostTests(unittest.TestCase):
         self.assertEqual(len(groups), 1)
         self.assertEqual(groups[0].root.id, "170129321")
         self.assertEqual([reply.id for reply in groups[0].replies], ["170166845", "170207702"])
+
+    def test_groups_later_reply_under_comment_kids_parent_when_depth_tracker_loses_parent(self):
+        comments = parse_legacy_comments(NEXUS_WIDGET_REPLY_CONTINUATION_HTML)
+
+        groups = group_comments_by_root(comments)
+
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0].root.id, "170129321")
+        self.assertEqual([reply.id for reply in groups[0].replies], ["170166845", "170207702", "170292092"])
 
     def test_builds_issue_content_and_probable_bug_labels(self):
         root = parse_legacy_comments(LEGACY_COMMENTS_HTML)[0]
